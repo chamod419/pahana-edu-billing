@@ -10,6 +10,7 @@ public class CustomerService {
     private final CustomerDAO dao = new CustomerDAO();
 
     public List<Customer> list() { return dao.findAll(); }
+    public List<Customer> search(String q) { return (q==null || q.isBlank()) ? dao.findAll() : dao.search(q); }
     public Optional<Customer> get(int id) { return dao.findById(id); }
 
     public boolean save(Customer c) {

@@ -12,11 +12,11 @@ import java.util.List;
 import java.util.Optional;
 
 @WebServlet(urlPatterns = {
-        "/customers",         // list
-        "/customers/new",     // form create
-        "/customers/edit",    // form edit?id=...
-        "/customers/save",    // POST
-        "/customers/delete"   // POST
+        "/customers",
+        "/customers/new",
+        "/customers/edit",
+        "/customers/save",
+        "/customers/delete"
 })
 public class CustomerController extends HttpServlet {
     private final CustomerService svc = new CustomerService();
@@ -28,18 +28,20 @@ public class CustomerController extends HttpServlet {
         String path = req.getServletPath();
 
         switch (path) {
-            case "/customers":
-                List<Customer> all = svc.list();
+            case "/customers": {
+                String q = trim(req.getParameter("q"));
+                List<Customer> all = (q == null) ? svc.list() : svc.search(q);
                 req.setAttribute("list", all);
+                req.setAttribute("q", q);
                 req.getRequestDispatcher("/customers/list.jsp").forward(req, resp);
                 break;
-
+            }
             case "/customers/new":
                 req.setAttribute("mode", "create");
                 req.getRequestDispatcher("/customers/form.jsp").forward(req, resp);
                 break;
 
-            case "/customers/edit":
+            case "/customers/edit": {
                 int id = parseInt(req.getParameter("id"));
                 Optional<Customer> c = svc.get(id);
                 if (c.isEmpty()) {
@@ -50,6 +52,7 @@ public class CustomerController extends HttpServlet {
                 req.setAttribute("c", c.get());
                 req.getRequestDispatcher("/customers/form.jsp").forward(req, resp);
                 break;
+            }
 
             default:
                 resp.sendError(HttpServletResponse.SC_NOT_FOUND);
@@ -88,13 +91,8 @@ public class CustomerController extends HttpServlet {
             }
 
             case "/customers/delete": {
-                // Admin-only delete
-                HttpSession s = req.getSession(false);
-                User u = (s==null) ? null : (User) s.getAttribute("user");
-                if (u == null || !"ADMIN".equals(u.getRole())) {
-                    resp.sendError(HttpServletResponse.SC_FORBIDDEN);
-                    return;
-                }
+                // Allow both ADMIN and STAFF to delete (login is enforced by AuthFilter)
+                // If you want Admin-only, re-enable the role check here.
                 int id = parseInt(req.getParameter("id"));
                 boolean ok = svc.delete(id);
                 String q = ok ? "msg=Deleted" : "error=Delete+failed";
@@ -107,8 +105,6 @@ public class CustomerController extends HttpServlet {
         }
     }
 
-    private int parseInt(String s) {
-        try { return Integer.parseInt(s); } catch (Exception e) { return 0; }
-    }
+    private int parseInt(String s) { try { return Integer.parseInt(s); } catch (Exception e) { return 0; } }
     private String trim(String s) { return (s==null)? null : s.trim(); }
 }

@@ -45,10 +45,38 @@
       <artifactId>jbcrypt</artifactId>
       <version>0.4</version>
     </dependency>
+
+    <!-- iText 7: build receipt PDFs (AGPL license) -->
+    <dependency>
+      <groupId>com.itextpdf</groupId>
+      <artifactId>kernel</artifactId>
+      <version>7.2.5</version>
+    </dependency>
+    <dependency>
+      <groupId>com.itextpdf</groupId>
+      <artifactId>layout</artifactId>
+      <version>7.2.5</version>
+    </dependency>
+
+    <!-- PDFBox: send PDFs to printers (POS) -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>3.0.2</version>
+    </dependency>
   </dependencies>
 
   <build>
     <plugins>
+      <!-- (optional but nice) lock compiler to Java 11 release -->
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+        <configuration>
+          <release>11</release>
+        </configuration>
+      </plugin>
+
       <plugin>
         <artifactId>maven-war-plugin</artifactId>
         <version>3.4.0</version>
@@ -58,4 +86,4 @@
       </plugin>
     </plugins>
   </build>
-</project>	
+</project>
