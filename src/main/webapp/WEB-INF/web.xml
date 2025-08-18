@@ -1,6 +1,13 @@
+<!-- src/main/webapp/WEB-INF/web.xml -->
 <web-app xmlns="http://xmlns.jcp.org/xml/ns/javaee" version="4.0">
   <display-name>pahana-edu-system</display-name>
   <welcome-file-list>
     <welcome-file>index.jsp</welcome-file>
   </welcome-file-list>
+
+  <!-- where files live on disk (change if you like) -->
+  <context-param>
+    <param-name>upload.dir</param-name>
+    <param-value>C:/pahanaedu_uploads</param-value>
+  </context-param>
 </web-app>

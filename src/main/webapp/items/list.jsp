@@ -1,5 +1,6 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
 <!doctype html>
 <html>
 <head>
@@ -8,20 +9,23 @@
   <style>
     body{font-family: Arial, sans-serif; margin:28px;}
     table{border-collapse: collapse; width:100%;}
-    th,td{border:1px solid #e3e3e3; padding:8px; text-align:left;}
+    th,td{border:1px solid #e3e3e3; padding:8px; text-align:left; vertical-align: top;}
     .top{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
     .msg{color:#006400} .err{color:#b00020}
     .btn{padding:6px 10px; border:1px solid #ccc; border-radius:8px; text-decoration:none;}
     img.thumb{max-height:40px;}
     form.inline{display:inline;}
+    .desc{max-width:360px; white-space:pre-wrap;}
   </style>
 </head>
 <body>
+<c:set var="ctx" value="${pageContext.request.contextPath}"/>
+
 <div class="top">
   <h2>Items</h2>
   <div>
-    <a class="btn" href="${pageContext.request.contextPath}/items/new">+ New Item</a>
-    <a class="btn" href="${pageContext.request.contextPath}/dashboard">Back</a>
+    <a class="btn" href="${ctx}/items/new">+ New Item</a>
+    <a class="btn" href="${ctx}/dashboard">Back</a>
   </div>
 </div>
 
@@ -31,7 +35,15 @@
 <table>
   <thead>
   <tr>
-    <th>ID</th><th>Name</th><th>Price</th><th>Stock</th><th>Category</th><th>Status</th><th>Image</th><th>Actions</th>
+    <th>ID</th>
+    <th>Name</th>
+    <th>Price</th>
+    <th>Stock</th>
+    <th>Category</th>
+    <th>Status</th>
+    <th>Image</th>
+    <th>Description</th>  <!-- NEW -->
+    <th>Actions</th>
   </tr>
   </thead>
   <tbody>
@@ -45,12 +57,22 @@
       <td><c:out value="${it.active ? 'ACTIVE' : 'INACTIVE'}"/></td>
       <td>
         <c:if test="${not empty it.imageUrl}">
-          <img class="thumb" src="${it.imageUrl}" alt="img"/>
+          <img class="thumb" src="${ctx}/uploads/${it.imageUrl}" alt="img"/>
         </c:if>
       </td>
+      <td class="desc" title="${it.description}">
+        <c:choose>
+          <c:when test="${not empty it.description and fn:length(it.description) > 120}">
+            <c:out value="${fn:substring(it.description,0,120)}"/>…
+          </c:when>
+          <c:otherwise>
+            <c:out value="${it.description}"/>
+          </c:otherwise>
+        </c:choose>
+      </td>
       <td>
-        <a class="btn" href="${pageContext.request.contextPath}/items/edit?id=${it.itemId}">Edit</a>
-        <form class="inline" action="${pageContext.request.contextPath}/items/delete" method="post"
+        <a class="btn" href="${ctx}/items/edit?id=${it.itemId}">Edit</a>
+        <form class="inline" action="${ctx}/items/delete" method="post"
               onsubmit="return confirm('Delete this item? (Admin only)');">
           <input type="hidden" name="id" value="${it.itemId}">
           <button class="btn" type="submit">Delete</button>

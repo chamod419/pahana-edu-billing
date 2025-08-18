@@ -30,7 +30,8 @@
     <a href="${pageContext.request.contextPath}/staff/billing.jsp">Generate Bill</a> |
     <a href="${pageContext.request.contextPath}/customers">Customers</a>
     <a href="${pageContext.request.contextPath}/items">Manage Items</a>
-    <a href="${pageContext.request.contextPath}/login?action=logout">Logout</a>
+    <a href="${pageContext.request.contextPath}/logout">Logout</a>
+    
     
   </p>
 </body>

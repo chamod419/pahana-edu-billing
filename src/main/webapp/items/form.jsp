@@ -1,5 +1,6 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
 <%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<%@ taglib prefix="fn" uri="http://java.sun.com/jsp/jstl/functions" %>
 <!doctype html>
 <html>
 <head>
@@ -14,16 +15,25 @@
     .actions{margin-top:16px;}
     .btn{padding:8px 12px; border:1px solid #ccc; border-radius:8px; text-decoration:none;}
     .err{color:#b00020}
+    img.preview{max-height:140px; border:1px solid #eee; border-radius:8px; margin-top:8px;}
+    .hint{color:#666; font-size:12px;}
   </style>
 </head>
 <body>
+<c:set var="ctx" value="${pageContext.request.contextPath}"/>
+<!-- 5 fixed categories -->
+<c:set var="categoriesCSV" value="Stationery,Accessories,Books,Printing,Services"/>
+<c:set var="cats" value="${fn:split(categoriesCSV, ',')}"/>
+
 <h2><c:out value="${mode=='edit' ? 'Edit Item' : 'New Item'}"/></h2>
 
 <c:if test="${not empty error}"><div class="err">${error}</div></c:if>
 
 <div class="card">
-  <form action="${pageContext.request.contextPath}/items/save" method="post">
+  <!-- file upload enabled -->
+  <form action="${ctx}/items/save" method="post" enctype="multipart/form-data">
     <input type="hidden" name="itemId" value="${i.itemId}"/>
+    <input type="hidden" name="existingImage" value="${i.imageUrl}"/>
 
     <label>Name *</label>
     <input name="name" required value="${i.name}"/>
@@ -41,8 +51,15 @@
 
     <div class="row">
       <div>
-        <label>Category</label>
-        <input name="category" value="${i.category}"/>
+        <label>Category *</label>
+        <select name="category" required>
+          <c:forEach var="cat" items="${cats}">
+            <option value="${fn:trim(cat)}"
+                    ${i.category==fn:trim(cat) ? 'selected' : ''}>
+              ${fn:trim(cat)}
+            </option>
+          </c:forEach>
+        </select>
       </div>
       <div>
         <label>Status</label>
@@ -56,12 +73,19 @@
     <label>Description</label>
     <textarea name="description" rows="3">${i.description}</textarea>
 
-    <label>Image URL (optional)</label>
-    <input name="imageUrl" value="${i.imageUrl}"/>
+    <!-- File upload ONLY -->
+    <label>Image File (JPG/PNG/GIF, ≤5MB)</label>
+    <input type="file" name="imageFile" accept="image/*"/>
+    <div class="hint">If you don't choose a file, we will keep the existing image (when editing).</div>
+
+    <c:if test="${not empty i.imageUrl}">
+      <p style="margin-top:12px">Current image:</p>
+      <img class="preview" src="${ctx}/uploads/${i.imageUrl}" alt="current"/>
+    </c:if>
 
     <div class="actions">
       <button class="btn" type="submit">Save</button>
-      <a class="btn" href="${pageContext.request.contextPath}/items">Cancel</a>
+      <a class="btn" href="${ctx}/items">Cancel</a>
     </div>
   </form>
 </div>

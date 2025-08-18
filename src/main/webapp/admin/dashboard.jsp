@@ -20,7 +20,7 @@
     <h2>Admin Dashboard</h2>
     <div>
       <strong>${sessionScope.user.username}</strong> | 
-      <a href="${pageContext.request.contextPath}/login?action=logout">Logout</a>
+      <a href="${pageContext.request.contextPath}/logout">Logout</a>
     </div>
   </div>
 
