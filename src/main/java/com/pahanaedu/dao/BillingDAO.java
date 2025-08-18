@@ -4,97 +4,198 @@ import com.pahanaedu.model.Bill;
 import com.pahanaedu.model.BillItem;
 
 import java.sql.*;
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
 
 public class BillingDAO {
 
-    public int insertBill(Bill bill) throws SQLException {
-        String sql = "INSERT INTO bills(customerId, createdBy, billDate, grossTotal, discount, netTotal, notes) " +
-                     "VALUES (?, ?, NOW(), ?, ?, ?, ?)";
-        try (Connection c = DBConnection.getInstance().getConnection();
-             PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setInt(1, bill.getCustomerId());
-            ps.setInt(2, bill.getCreatedBy());
-            ps.setDouble(3, bill.getGrossTotal());
-            ps.setDouble(4, bill.getDiscount());
-            ps.setDouble(5, bill.getNetTotal());
-            ps.setString(6, bill.getNotes());
-            ps.executeUpdate();
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) return keys.getInt(1);
+    // -------------------- Bill create / draft --------------------
+    public int createDraft(Integer customerId, int createdBy) throws SQLException {
+        final String nextNoSql =
+                "SELECT LPAD(IFNULL(MAX(billId)+1,1),5,'0') FROM bills";
+        final String insertSql =
+                "INSERT INTO bills (billNo, billDate, customerId, createdBy, subTotal, discountAmt, netTotal, paidAmount, paymentMethod) " +
+                "VALUES (?, NOW(), ?, ?, 0.00, 0.00, 0.00, 0.00, 'CASH')";
+
+        try (Connection c = DBConnection.getInstance().getConnection()) {
+            c.setAutoCommit(false);
+            try (Statement st = c.createStatement();
+                 ResultSet rs = st.executeQuery(nextNoSql)) {
+
+                rs.next();
+                String billNo = "B-" + rs.getString(1);
+
+                try (PreparedStatement ps = c.prepareStatement(insertSql, Statement.RETURN_GENERATED_KEYS)) {
+                    ps.setString(1, billNo);
+                    if (customerId == null) ps.setNull(2, Types.INTEGER); else ps.setInt(2, customerId);
+                    ps.setInt(3, createdBy);
+                    ps.executeUpdate();
+
+                    try (ResultSet gk = ps.getGeneratedKeys()) {
+                        gk.next();
+                        int billId = gk.getInt(1);
+                        c.commit();
+                        return billId;
+                    }
+                }
+            } catch (SQLException ex) {
+                c.rollback();
+                throw ex;
+            } finally {
+                c.setAutoCommit(true);
             }
         }
-        return 0;
     }
 
-    public void insertBillItem(int billId, BillItem bi) throws SQLException {
-        String sql = "INSERT INTO bill_items(billId, itemId, qty, unitPrice, lineDiscount, subTotal) " +
-                     "VALUES(?,?,?,?,?,?)";
+    /** Optional helper to change the draft's customer (null allowed). */
+    public void setCustomer(int billId, Integer customerId) throws SQLException {
+        final String sql = "UPDATE bills SET customerId=? WHERE billId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, billId);
-            ps.setInt(2, bi.getItemId());
-            ps.setInt(3, bi.getQty());
-            ps.setDouble(4, bi.getUnitPrice());
-            ps.setDouble(5, bi.getLineDiscount());
-            ps.setDouble(6, bi.getSubTotal());
+            if (customerId == null) ps.setNull(1, Types.INTEGER); else ps.setInt(1, customerId);
+            ps.setInt(2, billId);
             ps.executeUpdate();
         }
     }
 
-    // Optional: adjust stock on save
-    public void decreaseStock(int itemId, int qty) throws SQLException {
-        String sql = "UPDATE items SET stockQty = stockQty - ? WHERE itemId = ? AND stockQty >= ?";
+    // -------------------- Items on a bill --------------------
+    public void addLine(int billId, int itemId, int qty) throws SQLException {
+        // Friendly guards before triggers run
+        final String check = "SELECT isActive, stockQty, name FROM items WHERE itemId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, qty);
+             PreparedStatement cp = c.prepareStatement(check)) {
+            cp.setInt(1, itemId);
+            try (ResultSet rs = cp.executeQuery()) {
+                if (!rs.next()) throw new SQLException("Item not found");
+                boolean active = rs.getBoolean("isActive");
+                int stock = rs.getInt("stockQty");
+                String nm = rs.getString("name");
+                if (!active) throw new SQLException("Item '" + nm + "' is INACTIVE");
+                if (qty <= 0) throw new SQLException("Quantity must be > 0");
+                if (stock < qty) throw new SQLException("Not enough stock for '" + nm + "'");
+            }
+        }
+
+        // Triggers fill itemName/unitPrice, compute lineTotal, and adjust stock
+        final String ins = "INSERT INTO bill_items (billId, itemId, qty) VALUES (?,?,?)";
+        try (Connection c = DBConnection.getInstance().getConnection();
+             PreparedStatement ps = c.prepareStatement(ins)) {
+            ps.setInt(1, billId);
             ps.setInt(2, itemId);
             ps.setInt(3, qty);
             ps.executeUpdate();
         }
     }
 
-    // Load bill for receipt (simple join)
-    public Optional<Bill> loadBill(int billId) {
-        String billSql = "SELECT billId, customerId, createdBy, grossTotal, discount, netTotal, notes " +
-                         "FROM bills WHERE billId=?";
-        String itemsSql = "SELECT bi.itemId, i.name, bi.qty, bi.unitPrice, bi.lineDiscount, bi.subTotal " +
-                          "FROM bill_items bi JOIN items i ON i.itemId = bi.itemId WHERE bi.billId=?";
-
-        Bill b = null;
+    public void removeLine(int billItemId) throws SQLException {
+        // Stock is restored via AFTER DELETE trigger
+        final String del = "DELETE FROM bill_items WHERE billItemId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
-             PreparedStatement ps1 = c.prepareStatement(billSql)) {
-            ps1.setInt(1, billId);
-            try (ResultSet rs = ps1.executeQuery()) {
-                if (rs.next()) {
-                    b = new Bill();
-                    b.setBillId(rs.getInt("billId"));
-                    b.setCustomerId(rs.getInt("customerId"));
-                    b.setCreatedBy(rs.getInt("createdBy"));
-                    b.setGrossTotal(rs.getDouble("grossTotal"));
-                    b.setDiscount(rs.getDouble("discount"));
-                    b.setNetTotal(rs.getDouble("netTotal"));
-                    b.setNotes(rs.getString("notes"));
-                }
-            }
-            if (b == null) return Optional.empty();
+             PreparedStatement ps = c.prepareStatement(del)) {
+            ps.setInt(1, billItemId);
+            ps.executeUpdate();
+        }
+    }
 
-            try (PreparedStatement ps2 = c.prepareStatement(itemsSql)) {
-                ps2.setInt(1, billId);
-                try (ResultSet rs2 = ps2.executeQuery()) {
-                    while (rs2.next()) {
-                        BillItem it = new BillItem();
-                        it.setItemId(rs2.getInt(1));
-                        it.setItemName(rs2.getString(2));
-                        it.setQty(rs2.getInt(3));
-                        it.setUnitPrice(rs2.getDouble(4));
-                        it.setLineDiscount(rs2.getDouble(5));
-                        it.setSubTotal(rs2.getDouble(6));
-                        b.getItems().add(it);
-                    }
+    public List<BillItem> listLines(int billId) throws SQLException {
+        final String sql = "SELECT billItemId,billId,itemId,itemName,unitPrice,qty,lineTotal " +
+                           "FROM bill_items WHERE billId=? ORDER BY billItemId";
+        List<BillItem> out = new ArrayList<>();
+        try (Connection c = DBConnection.getInstance().getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, billId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    BillItem bi = new BillItem();
+                    bi.setBillItemId(rs.getInt("billItemId"));
+                    bi.setBillId(rs.getInt("billId"));
+                    int iid = rs.getInt("itemId");
+                    bi.setItemId(rs.wasNull() ? null : iid);
+                    bi.setItemName(rs.getString("itemName"));
+                    bi.setUnitPrice(rs.getDouble("unitPrice"));
+                    bi.setQty(rs.getInt("qty"));
+                    bi.setLineTotal(rs.getDouble("lineTotal"));
+                    out.add(bi);
                 }
             }
-            return Optional.of(b);
-        } catch (SQLException e) { e.printStackTrace(); return Optional.empty(); }
+        }
+        return out;
+    }
+
+    // -------------------- Totals / finalize --------------------
+    public void recomputeTotals(int billId) throws SQLException {
+        final String up =
+            "UPDATE bills b SET " +
+            " subTotal = (SELECT COALESCE(SUM(lineTotal),0) FROM bill_items bi WHERE bi.billId=b.billId), " +
+            " netTotal = subTotal - discountAmt, " +
+            " paidAmount = netTotal " +
+            "WHERE b.billId=?";
+        try (Connection c = DBConnection.getInstance().getConnection();
+             PreparedStatement ps = c.prepareStatement(up)) {
+            ps.setInt(1, billId);
+            ps.executeUpdate();
+        }
+    }
+
+    public void applyDiscountAndMethod(int billId, double discountAmt, String method) throws SQLException {
+        final String up = "UPDATE bills SET discountAmt=?, paymentMethod=? WHERE billId=?";
+        try (Connection c = DBConnection.getInstance().getConnection();
+             PreparedStatement ps = c.prepareStatement(up)) {
+            ps.setDouble(1, Math.max(0, discountAmt));
+            ps.setString(2, (method == null || method.isBlank()) ? "CASH" : method);
+            ps.setInt(3, billId);
+            ps.executeUpdate();
+        }
+        recomputeTotals(billId);
+    }
+
+    public Bill getBill(int billId) throws SQLException {
+        final String sql = "SELECT billId,billNo,billDate,customerId,createdBy,subTotal,discountAmt,netTotal,paidAmount,paymentMethod " +
+                           "FROM bills WHERE billId=?";
+        try (Connection c = DBConnection.getInstance().getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, billId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    Bill b = new Bill();
+                    b.setBillId(rs.getInt("billId"));
+                    b.setBillNo(rs.getString("billNo"));
+                    Timestamp ts = rs.getTimestamp("billDate");
+                    b.setBillDate(ts == null ? null : ts.toLocalDateTime());
+                    int cid = rs.getInt("customerId"); b.setCustomerId(rs.wasNull() ? null : cid);
+                    int uid = rs.getInt("createdBy");  b.setCreatedBy(rs.wasNull() ? null : uid);
+                    b.setSubTotal(rs.getDouble("subTotal"));
+                    b.setDiscountAmt(rs.getDouble("discountAmt"));
+                    b.setNetTotal(rs.getDouble("netTotal"));
+                    b.setPaidAmount(rs.getDouble("paidAmount"));
+                    b.setPaymentMethod(rs.getString("paymentMethod"));
+                    b.setItems(listLines(billId));
+                    return b;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Alias required by some controllers/utilities that call loadBill(...). */
+    public Bill loadBill(int billId) throws SQLException {
+        return getBill(billId);
+    }
+
+    public void cancelBill(int billId) throws SQLException {
+        try (Connection c = DBConnection.getInstance().getConnection()) {
+            c.setAutoCommit(false);
+            try (PreparedStatement p1 = c.prepareStatement("DELETE FROM bill_items WHERE billId=?");
+                 PreparedStatement p2 = c.prepareStatement("DELETE FROM bills WHERE billId=?")) {
+                p1.setInt(1, billId); p1.executeUpdate();
+                p2.setInt(1, billId); p2.executeUpdate();
+                c.commit();
+            } catch (SQLException ex) {
+                c.rollback();
+                throw ex;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        }
     }
 }

@@ -1,23 +1,35 @@
 package com.pahanaedu.model;
 
 public class BillItem {
-    private int itemId;
-    private String itemName; // for display
+    private int billItemId;
+    private int billId;
+    private Integer itemId;     // nullable after delete
+    private String itemName;    // snapshot
+    private double unitPrice;   // snapshot
     private int qty;
-    private double unitPrice;
-    private double lineDiscount; // per line
-    private double subTotal;
+    private double lineTotal;
 
-    public int getItemId() { return itemId; }
-    public void setItemId(int itemId) { this.itemId = itemId; }
+    public int getBillItemId() { return billItemId; }
+    public void setBillItemId(int billItemId) { this.billItemId = billItemId; }
+
+    public int getBillId() { return billId; }
+    public void setBillId(int billId) { this.billId = billId; }
+
+    public Integer getItemId() { return itemId; }
+    public void setItemId(Integer itemId) { this.itemId = itemId; }
+
     public String getItemName() { return itemName; }
     public void setItemName(String itemName) { this.itemName = itemName; }
-    public int getQty() { return qty; }
-    public void setQty(int qty) { this.qty = qty; }
+
     public double getUnitPrice() { return unitPrice; }
     public void setUnitPrice(double unitPrice) { this.unitPrice = unitPrice; }
-    public double getLineDiscount() { return lineDiscount; }
-    public void setLineDiscount(double lineDiscount) { this.lineDiscount = lineDiscount; }
-    public double getSubTotal() { return subTotal; }
-    public void setSubTotal(double subTotal) { this.subTotal = subTotal; }
+
+    public int getQty() { return qty; }
+    public void setQty(int qty) { this.qty = qty; }
+
+    public double getLineTotal() { return lineTotal; }
+    public void setLineTotal(double lineTotal) { this.lineTotal = lineTotal; }
+
+    // Compatibility for PdfReceiptUtil
+    public double getSubTotal() { return lineTotal; }
 }

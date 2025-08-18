@@ -47,6 +47,8 @@
     <a href="${pageContext.request.contextPath}/items">Manage Items</a>
     <a href="${pageContext.request.contextPath}/billing/new">Generate Bill</a>
     <a href="${pageContext.request.contextPath}/admin/reports.jsp">Reports</a>
+    <a href="${pageContext.request.contextPath}/admin/users">Manage Users</a>
+
     
     <a href="${pageContext.request.contextPath}/customers">Manage Customers</a>
     

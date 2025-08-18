@@ -19,7 +19,7 @@ public class ItemService {
     }
 
     public DeleteResult deleteSafe(int id) {
-        int uses = dao.countUsageInBills(id);
+        long uses = dao.countUsageInBills(id);   // <-- long
         if (uses > 0) return DeleteResult.IN_USE;
         if (uses < 0) return DeleteResult.ERROR;
         return dao.delete(id) ? DeleteResult.OK : DeleteResult.ERROR;

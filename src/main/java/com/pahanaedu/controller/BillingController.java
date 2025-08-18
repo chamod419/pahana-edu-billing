@@ -1,12 +1,10 @@
 package com.pahanaedu.controller;
 
-import com.pahanaedu.model.Bill;
-import com.pahanaedu.model.User;
-import com.pahanaedu.service.BillingService;
-import com.pahanaedu.service.CustomerService;
 import com.pahanaedu.dao.ItemDAO;
 import com.pahanaedu.model.Item;
-import com.pahanaedu.service.ItemService;   // << ADDED
+import com.pahanaedu.model.User;
+import com.pahanaedu.model.Bill;
+import com.pahanaedu.service.BillingService;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -14,179 +12,108 @@ import javax.servlet.http.*;
 import java.io.IOException;
 import java.sql.SQLException;
 import java.util.List;
-import java.util.Optional;
 
 @WebServlet(urlPatterns = {
-        "/billing/new",
-        "/billing/add",
-        "/billing/update",
-        "/billing/remove",
-        "/billing/discount",
-        "/billing/save",
-        "/billing/receipt"
+        "/billing",            // GET screen
+        "/billing/start",      // POST start new bill (optional)
+        "/billing/add",        // POST add item
+        "/billing/remove",     // POST remove line
+        "/billing/finalize",   // POST finalize (discount/method)
+        "/billing/cancel"      // POST cancel draft
 })
 public class BillingController extends HttpServlet {
-
-    private final BillingService billing = new BillingService();
-    private final CustomerService customers = new CustomerService();
-    private final ItemDAO itemDAO = new ItemDAO();
-    private final ItemService items = new ItemService();  // << ADDED
-
-    private Bill getCart(HttpServletRequest req, int userId) {
-        HttpSession s = req.getSession(true);
-        Bill cart = (Bill) s.getAttribute("billCart");
-        cart = billing.ensureCart(cart, userId);
-        s.setAttribute("billCart", cart);
-        return cart;
-    }
+    private final BillingService svc = new BillingService();
+    private final ItemDAO itemDAO = new ItemDAO(); // for dropdown
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
-
         String path = req.getServletPath();
+        if ("/billing".equals(path)) {
+            show(req, resp);
+        } else {
+            resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+        }
+    }
+
+    private void show(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
         HttpSession s = req.getSession(false);
         User u = (s==null) ? null : (User) s.getAttribute("user");
         if (u == null) { resp.sendRedirect(req.getContextPath()+"/login"); return; }
 
-        switch (path) {
-            case "/billing/new": {
-                req.setAttribute("customers", customers.list());
-
-                // search box: show only billable items (active && stock>0)
-                String q = trim(req.getParameter("q"));
-                if (q != null && !q.isBlank()) {
-                    List<Item> search = itemDAO.findAll().stream()
-                            .filter(it -> it.isActive() && it.getStockQty() > 0)
-                            .filter(it -> it.getName() != null &&
-                                          it.getName().toLowerCase().contains(q.toLowerCase()))
-                            .limit(20)
-                            .toList();
-                    req.setAttribute("search", search);
-                    req.setAttribute("q", q);
-                }
-
-                Bill cart = getCart(req, u.getUserId());
-                req.setAttribute("cart", cart);
-                req.getRequestDispatcher("/billing/new.jsp").forward(req, resp);
-                break;
+        Integer billId = (Integer) ((s!=null)? s.getAttribute("draftBillId") : null);
+        try {
+            if (billId == null) {
+                billId = svc.startBill(null, u.getUserId());
+                req.getSession(true).setAttribute("draftBillId", billId);
             }
-
-            case "/billing/receipt": {
-                String idStr = req.getParameter("id");
-                if (idStr == null) { resp.sendError(400); return; }
-                int billId = parseInt(idStr);
-                Optional<com.pahanaedu.model.Bill> loaded =
-                        new com.pahanaedu.dao.BillingDAO().loadBill(billId);
-                if (loaded.isEmpty()) { resp.sendError(404); return; }
-                req.setAttribute("bill", loaded.get());
-                req.setAttribute("customer", customers.get(loaded.get().getCustomerId()).orElse(null));
-                req.getRequestDispatcher("/billing/receipt.jsp").forward(req, resp);
-                break;
-            }
-
-            default: resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+            Bill b = svc.get(billId);
+            List<Item> active = itemDAO.findActive(); // dropdown
+            req.setAttribute("bill", b);
+            req.setAttribute("activeItems", active);
+            req.getRequestDispatcher("/staff/billing.jsp").forward(req, resp);
+        } catch (SQLException e) {
+            throw new ServletException(e);
         }
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp)
             throws IOException, ServletException {
-
         String path = req.getServletPath();
-        HttpSession s = req.getSession(false);
-        User u = (s==null) ? null : (User) s.getAttribute("user");
-        if (u == null) { resp.sendRedirect(req.getContextPath()+"/login"); return; }
+        HttpSession s = req.getSession(true);
+        Integer billId = (Integer) s.getAttribute("draftBillId");
+        if (billId == null) {
+            resp.sendRedirect(req.getContextPath()+"/billing"); return;
+        }
 
-        Bill cart = getCart(req, u.getUserId());
-
-        switch (path) {
-            case "/billing/add": {
-                int itemId = parseInt(req.getParameter("itemId"));
-                int qty    = parseInt(req.getParameter("qty"));
-
-                if (qty <= 0) { redirectBack(req, resp, "Quantity must be greater than 0"); return; }
-
-                // **Billable check** (active && stock>0)
-                Optional<Item> billable = items.findBillable(itemId);
-                if (billable.isEmpty()) {
-                    redirectBack(req, resp, "Item is inactive or out of stock");
-                    return;
+        try {
+            switch (path) {
+                case "/billing/add": {
+                    int itemId = parseInt(req.getParameter("itemId"));
+                    int qty = Math.max(1, parseInt(req.getParameter("qty")));
+                    try {
+                        svc.addItem(billId, itemId, qty);
+                        resp.sendRedirect(req.getContextPath()+"/billing?msg=Added");
+                    } catch (SQLException ex) {
+                        resp.sendRedirect(req.getContextPath()+"/billing?error=" +
+                                url(ex.getMessage()));
+                    }
+                    break;
                 }
-                // Optional: check requested qty <= available stock
-                if (qty > billable.get().getStockQty()) {
-                    redirectBack(req, resp, "Only "+billable.get().getStockQty()+" available");
-                    return;
+                case "/billing/remove": {
+                    int billItemId = parseInt(req.getParameter("billItemId"));
+                    svc.removeLine(billItemId, billId);
+                    resp.sendRedirect(req.getContextPath()+"/billing?msg=Removed");
+                    break;
                 }
-
-                String err = billing.addItem(cart, itemId, qty);
-                redirectBack(req, resp, err);
-                break;
-            }
-            case "/billing/update": {
-                int itemId = parseInt(req.getParameter("itemId"));
-                int qty    = parseInt(req.getParameter("qty"));
-
-                if (qty <= 0) { redirectBack(req, resp, "Quantity must be greater than 0"); return; }
-
-                Optional<Item> billable = items.findBillable(itemId);
-                if (billable.isEmpty()) {
-                    redirectBack(req, resp, "Item is inactive or out of stock");
-                    return;
+                case "/billing/finalize": {
+                    double discount = parseDouble(req.getParameter("discountAmt"));
+                    String method = trim(req.getParameter("paymentMethod"));
+                    svc.finalizeBill(billId, discount, method);
+                    // clear draft
+                    s.removeAttribute("draftBillId");
+                    resp.sendRedirect(req.getContextPath()+"/dashboard?msg=Bill+saved");
+                    break;
                 }
-                if (qty > billable.get().getStockQty()) {
-                    redirectBack(req, resp, "Only "+billable.get().getStockQty()+" available");
-                    return;
+                case "/billing/cancel": {
+                    svc.cancel(billId);
+                    s.removeAttribute("draftBillId");
+                    resp.sendRedirect(req.getContextPath()+"/dashboard?msg=Bill+cancelled");
+                    break;
                 }
-
-                String err = billing.updateQty(cart, itemId, qty);
-                redirectBack(req, resp, err);
-                break;
+                default:
+                    resp.sendError(HttpServletResponse.SC_NOT_FOUND);
             }
-            case "/billing/remove": {
-                int itemId = parseInt(req.getParameter("itemId"));
-                billing.removeItem(cart, itemId);
-                redirectBack(req, resp, null);
-                break;
-            }
-            case "/billing/discount": {
-                double pct = parseDouble(req.getParameter("discountPct"));
-                if (pct < 0) pct = 0;
-                if (pct > 100) pct = 100;
-                billing.applyDiscount(cart, pct);
-                redirectBack(req, resp, null);
-                break;
-            }
-            case "/billing/save": {
-                int customerId = parseInt(req.getParameter("customerId"));
-                String notes   = trim(req.getParameter("notes"));
-                boolean decreaseStock = "on".equals(req.getParameter("decreaseStock"));
-
-                if (cart.getItems().isEmpty()) { redirectBack(req, resp, "No items in bill"); return; }
-                if (customerId <= 0) { redirectBack(req, resp, "Please select a customer"); return; }
-
-                try {
-                    int billId = billing.save(cart, customerId, u.getUserId(), notes, decreaseStock);
-                    req.getSession().removeAttribute("billCart");
-                    resp.sendRedirect(req.getContextPath()+"/billing/receipt?id="+billId);
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                    redirectBack(req, resp, "Saving bill failed");
-                }
-                break;
-            }
-            default: resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+        } catch (SQLException e) {
+            throw new ServletException(e);
         }
     }
 
     // helpers
-    private String trim(String s){ return (s==null)? null : s.trim(); }
     private int parseInt(String s){ try { return Integer.parseInt(s); } catch(Exception e){ return 0; } }
     private double parseDouble(String s){ try { return Double.parseDouble(s); } catch(Exception e){ return 0; } }
-
-    private void redirectBack(HttpServletRequest req, HttpServletResponse resp, String err) throws IOException {
-        String base = req.getContextPath()+"/billing/new";
-        if (err != null) base += "?error="+java.net.URLEncoder.encode(err, java.nio.charset.StandardCharsets.UTF_8);
-        resp.sendRedirect(base);
-    }
+    private String trim(String s){ return (s==null)? null : s.trim(); }
+    private String url(String s){ return java.net.URLEncoder.encode(s==null?"":s, java.nio.charset.StandardCharsets.UTF_8); }
 }
