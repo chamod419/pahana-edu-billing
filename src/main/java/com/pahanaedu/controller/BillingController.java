@@ -6,6 +6,7 @@ import com.pahanaedu.service.BillingService;
 import com.pahanaedu.service.CustomerService;
 import com.pahanaedu.dao.ItemDAO;
 import com.pahanaedu.model.Item;
+import com.pahanaedu.service.ItemService;   // << ADDED
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -20,7 +21,7 @@ import java.util.Optional;
         "/billing/add",
         "/billing/update",
         "/billing/remove",
-        "/billing/discount",   // expects discountPct
+        "/billing/discount",
         "/billing/save",
         "/billing/receipt"
 })
@@ -29,6 +30,7 @@ public class BillingController extends HttpServlet {
     private final BillingService billing = new BillingService();
     private final CustomerService customers = new CustomerService();
     private final ItemDAO itemDAO = new ItemDAO();
+    private final ItemService items = new ItemService();  // << ADDED
 
     private Bill getCart(HttpServletRequest req, int userId) {
         HttpSession s = req.getSession(true);
@@ -51,11 +53,15 @@ public class BillingController extends HttpServlet {
             case "/billing/new": {
                 req.setAttribute("customers", customers.list());
 
+                // search box: show only billable items (active && stock>0)
                 String q = trim(req.getParameter("q"));
                 if (q != null && !q.isBlank()) {
                     List<Item> search = itemDAO.findAll().stream()
-                            .filter(it -> it.getName() != null && it.getName().toLowerCase().contains(q.toLowerCase()))
-                            .limit(20).toList();
+                            .filter(it -> it.isActive() && it.getStockQty() > 0)
+                            .filter(it -> it.getName() != null &&
+                                          it.getName().toLowerCase().contains(q.toLowerCase()))
+                            .limit(20)
+                            .toList();
                     req.setAttribute("search", search);
                     req.setAttribute("q", q);
                 }
@@ -98,6 +104,21 @@ public class BillingController extends HttpServlet {
             case "/billing/add": {
                 int itemId = parseInt(req.getParameter("itemId"));
                 int qty    = parseInt(req.getParameter("qty"));
+
+                if (qty <= 0) { redirectBack(req, resp, "Quantity must be greater than 0"); return; }
+
+                // **Billable check** (active && stock>0)
+                Optional<Item> billable = items.findBillable(itemId);
+                if (billable.isEmpty()) {
+                    redirectBack(req, resp, "Item is inactive or out of stock");
+                    return;
+                }
+                // Optional: check requested qty <= available stock
+                if (qty > billable.get().getStockQty()) {
+                    redirectBack(req, resp, "Only "+billable.get().getStockQty()+" available");
+                    return;
+                }
+
                 String err = billing.addItem(cart, itemId, qty);
                 redirectBack(req, resp, err);
                 break;
@@ -105,6 +126,19 @@ public class BillingController extends HttpServlet {
             case "/billing/update": {
                 int itemId = parseInt(req.getParameter("itemId"));
                 int qty    = parseInt(req.getParameter("qty"));
+
+                if (qty <= 0) { redirectBack(req, resp, "Quantity must be greater than 0"); return; }
+
+                Optional<Item> billable = items.findBillable(itemId);
+                if (billable.isEmpty()) {
+                    redirectBack(req, resp, "Item is inactive or out of stock");
+                    return;
+                }
+                if (qty > billable.get().getStockQty()) {
+                    redirectBack(req, resp, "Only "+billable.get().getStockQty()+" available");
+                    return;
+                }
+
                 String err = billing.updateQty(cart, itemId, qty);
                 redirectBack(req, resp, err);
                 break;

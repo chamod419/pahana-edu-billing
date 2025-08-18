@@ -11,11 +11,17 @@ public class ItemService {
 
     public List<Item> list() { return dao.findAll(); }
     public Optional<Item> get(int id) { return dao.findById(id); }
+    public Optional<Item> findBillable(int id) { return dao.findBillableById(id); }
 
     public boolean save(Item i) {
         if (i.getItemId() == 0) return dao.insert(i);
         return dao.update(i);
     }
 
-    public boolean delete(int id) { return dao.delete(id); }
+    public DeleteResult deleteSafe(int id) {
+        int uses = dao.countUsageInBills(id);
+        if (uses > 0) return DeleteResult.IN_USE;
+        if (uses < 0) return DeleteResult.ERROR;
+        return dao.delete(id) ? DeleteResult.OK : DeleteResult.ERROR;
+    }
 }

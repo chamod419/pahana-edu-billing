@@ -1,6 +1,7 @@
 package com.pahanaedu.dao;
 
 import com.pahanaedu.model.Item;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +34,24 @@ public class ItemDAO {
         return Optional.empty();
     }
 
+    /** Billable = active and stock > 0 */
+    public Optional<Item> findBillableById(int id) {
+        String sql = "SELECT itemId,name,unitPrice,stockQty,category,description,imageUrl,isActive " +
+                     "FROM items WHERE itemId=? AND isActive=TRUE AND stockQty>0";
+        try (Connection c = DBConnection.getInstance().getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return Optional.of(map(rs));
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return Optional.empty();
+    }
+
     public boolean insert(Item x) {
+        // AUTO: stock>0 => ACTIVE, else INACTIVE
+        boolean active = x.getStockQty() > 0;
+
         String sql = "INSERT INTO items(name,unitPrice,stockQty,category,description,imageUrl,isActive) " +
                      "VALUES (?,?,?,?,?,?,?)";
         try (Connection c = DBConnection.getInstance().getConnection();
@@ -44,7 +62,7 @@ public class ItemDAO {
             ps.setString(4, nullIfBlank(x.getCategory()));
             ps.setString(5, nullIfBlank(x.getDescription()));
             ps.setString(6, nullIfBlank(x.getImageUrl()));
-            ps.setBoolean(7, x.isActive());
+            ps.setBoolean(7, active);
             int n = ps.executeUpdate();
             if (n>0) {
                 try (ResultSet keys = ps.getGeneratedKeys()) {
@@ -56,6 +74,9 @@ public class ItemDAO {
     }
 
     public boolean update(Item x) {
+        // AUTO: stock>0 => ACTIVE, else INACTIVE
+        boolean active = x.getStockQty() > 0;
+
         String sql = "UPDATE items SET name=?, unitPrice=?, stockQty=?, category=?, description=?, imageUrl=?, isActive=? " +
                      "WHERE itemId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
@@ -66,10 +87,22 @@ public class ItemDAO {
             ps.setString(4, nullIfBlank(x.getCategory()));
             ps.setString(5, nullIfBlank(x.getDescription()));
             ps.setString(6, nullIfBlank(x.getImageUrl()));
-            ps.setBoolean(7, x.isActive());
+            ps.setBoolean(7, active);
             ps.setInt(8, x.getItemId());
             return ps.executeUpdate() > 0;
         } catch (SQLException e) { e.printStackTrace(); return false; }
+    }
+
+    /** how many bill_items rows use this item */
+    public int countUsageInBills(int itemId) {
+        String sql = "SELECT COUNT(*) FROM bill_items WHERE itemId=?";
+        try (Connection c = DBConnection.getInstance().getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, itemId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        } catch (SQLException e) { e.printStackTrace(); return -1; }
     }
 
     public boolean delete(int id) {

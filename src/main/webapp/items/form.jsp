@@ -14,23 +14,19 @@
     .row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
     .actions{margin-top:16px;}
     .btn{padding:8px 12px; border:1px solid #ccc; border-radius:8px; text-decoration:none;}
-    .err{color:#b00020}
+    .note{color:#555; font-size:12px}
     img.preview{max-height:140px; border:1px solid #eee; border-radius:8px; margin-top:8px;}
-    .hint{color:#666; font-size:12px;}
   </style>
 </head>
 <body>
 <c:set var="ctx" value="${pageContext.request.contextPath}"/>
-<!-- 5 fixed categories -->
 <c:set var="categoriesCSV" value="Stationery,Accessories,Books,Printing,Services"/>
 <c:set var="cats" value="${fn:split(categoriesCSV, ',')}"/>
 
 <h2><c:out value="${mode=='edit' ? 'Edit Item' : 'New Item'}"/></h2>
-
-<c:if test="${not empty error}"><div class="err">${error}</div></c:if>
+<c:if test="${not empty error}"><div style="color:#b00020">${error}</div></c:if>
 
 <div class="card">
-  <!-- file upload enabled -->
   <form action="${ctx}/items/save" method="post" enctype="multipart/form-data">
     <input type="hidden" name="itemId" value="${i.itemId}"/>
     <input type="hidden" name="existingImage" value="${i.imageUrl}"/>
@@ -45,7 +41,8 @@
       </div>
       <div>
         <label>Stock Qty *</label>
-        <input type="number" min="0" name="stockQty" required value="${i.stockQty}"/>
+        <input id="stockQty" type="number" min="0" name="stockQty" required value="${i.stockQty}"
+               oninput="updateStatus()"/>
       </div>
     </div>
 
@@ -54,29 +51,24 @@
         <label>Category *</label>
         <select name="category" required>
           <c:forEach var="cat" items="${cats}">
-            <option value="${fn:trim(cat)}"
-                    ${i.category==fn:trim(cat) ? 'selected' : ''}>
-              ${fn:trim(cat)}
-            </option>
+            <option value="${fn:trim(cat)}" ${i.category==fn:trim(cat) ? 'selected' : ''}>${fn:trim(cat)}</option>
           </c:forEach>
         </select>
       </div>
       <div>
-        <label>Status</label>
-        <select name="status">
-          <option value="ACTIVE"  ${i.active ? 'selected' : ''}>ACTIVE</option>
-          <option value="INACTIVE" ${!i.active ? 'selected' : ''}>INACTIVE</option>
-        </select>
+        <label>Auto Status</label>
+        <div id="autoStatus" style="padding:10px;border:1px solid #eee;border-radius:8px;">
+          <c:out value="${(i.stockQty gt 0) ? 'ACTIVE' : 'INACTIVE'}"/>
+        </div>
+        <div class="note">Status auto-calculated by stock: qty&gt;0 → ACTIVE, qty=0 → INACTIVE.</div>
       </div>
     </div>
 
     <label>Description</label>
     <textarea name="description" rows="3">${i.description}</textarea>
 
-    <!-- File upload ONLY -->
     <label>Image File (JPG/PNG/GIF, ≤5MB)</label>
     <input type="file" name="imageFile" accept="image/*"/>
-    <div class="hint">If you don't choose a file, we will keep the existing image (when editing).</div>
 
     <c:if test="${not empty i.imageUrl}">
       <p style="margin-top:12px">Current image:</p>
@@ -89,5 +81,12 @@
     </div>
   </form>
 </div>
+
+<script>
+function updateStatus(){
+  var v = parseInt(document.getElementById('stockQty').value || '0', 10);
+  document.getElementById('autoStatus').textContent = (v > 0) ? 'ACTIVE' : 'INACTIVE';
+}
+</script>
 </body>
 </html>
