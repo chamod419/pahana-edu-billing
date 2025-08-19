@@ -23,13 +23,24 @@
 <c:set var="ctx" value="${pageContext.request.contextPath}"/>
 
 <!-- compute discount % safely from gross/discount -->
-<c:set var="discountPct" value="${bill.grossTotal > 0 ? (bill.discount * 100.0 / bill.grossTotal) : 0}"/>
+<c:set var="gross" value="${bill.grossTotal}"/>
+<c:set var="discAmt" value="${bill.discount}"/>
+<c:set var="discountPct" value="${gross > 0 ? (discAmt * 100.0 / gross) : 0}"/>
 
 <div class="head">
   <div>
     <h2>PahanaEdu — Receipt</h2>
     <div>Bill #${bill.billId}</div>
-    <div>Customer: <c:out value="${customer.name}"/></div>
+    <div>
+      Customer:
+      <c:choose>
+        <c:when test="${not empty customer}">
+          <strong><c:out value="${customer.name}"/></strong>
+          <span class="muted">(${customer.accountNumber})</span>
+        </c:when>
+        <c:otherwise>-</c:otherwise>
+      </c:choose>
+    </div>
   </div>
   <div class="noprint">
     <a href="${ctx}/billing/new">New Bill</a> |
@@ -41,7 +52,7 @@
       <button type="submit">Print to POS</button>
     </form> |
     <a href="#" onclick="window.print();return false;">Print (Browser)</a>
-    <div class="muted">Tip: If POS direct print doesn't work, use “Open PDF” → print to POS from browser.</div>
+    <div class="muted">If POS direct print fails on the server, open/download the PDF and print locally.</div>
   </div>
 </div>
 
@@ -57,26 +68,28 @@
   </thead>
   <tbody>
   <c:forEach var="bi" items="${bill.items}">
+    <c:set var="computedSub" value="${bi.subTotal}"/>
+    <c:set var="computedLineDisc" value="${(bi.unitPrice * bi.qty) - computedSub}"/>
     <tr>
       <td><c:out value="${bi.itemName}"/></td>
       <td class="right">${bi.qty}</td>
       <td class="right">Rs. <fmt:formatNumber value="${bi.unitPrice}" minFractionDigits="2" maxFractionDigits="2"/></td>
-      <td class="right">Rs. <fmt:formatNumber value="${bi.lineDiscount}" minFractionDigits="2" maxFractionDigits="2"/></td>
-      <td class="right">Rs. <fmt:formatNumber value="${bi.subTotal}" minFractionDigits="2" maxFractionDigits="2"/></td>
+      <td class="right">Rs. <fmt:formatNumber value="${computedLineDisc}" minFractionDigits="2" maxFractionDigits="2"/></td>
+      <td class="right">Rs. <fmt:formatNumber value="${computedSub}" minFractionDigits="2" maxFractionDigits="2"/></td>
     </tr>
   </c:forEach>
   </tbody>
   <tfoot>
     <tr>
       <th colspan="4" class="right">Gross</th>
-      <th class="right">Rs. <fmt:formatNumber value="${bill.grossTotal}" minFractionDigits="2" maxFractionDigits="2"/></th>
+      <th class="right">Rs. <fmt:formatNumber value="${gross}" minFractionDigits="2" maxFractionDigits="2"/></th>
     </tr>
     <tr>
       <th colspan="4" class="right">
         Discount
         (<fmt:formatNumber value="${discountPct}" minFractionDigits="0" maxFractionDigits="2"/>%)
       </th>
-      <th class="right">Rs. <fmt:formatNumber value="${bill.discount}" minFractionDigits="2" maxFractionDigits="2"/></th>
+      <th class="right">Rs. <fmt:formatNumber value="${discAmt}" minFractionDigits="2" maxFractionDigits="2"/></th>
     </tr>
     <tr>
       <th colspan="4" class="right big">Net Total</th>

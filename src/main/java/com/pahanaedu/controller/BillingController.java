@@ -35,14 +35,17 @@ import java.awt.print.PrinterJob;
         "/billing/setCustomer",
         "/billing/setNotes",
         "/billing/finalize",
-        "/billing/cancel"
+        "/billing/cancel",
+        "/billing/receipt"   // <-- NEW: HTML receipt actions page
 })
 public class BillingController extends HttpServlet {
+    private static final long serialVersionUID = 1L;
 
     private final BillingService svc = new BillingService();
     private final ItemDAO itemDAO = new ItemDAO();
     private final CustomerDAO customerDAO = new CustomerDAO();
 
+    // ---------- GET ----------
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
@@ -56,11 +59,34 @@ public class BillingController extends HttpServlet {
             case "/billing/start":
                 startNew(req, resp);
                 return;
+            case "/billing/receipt": { // HTML receipt page with actions / preview
+                User u = requireLogin(req, resp);
+                if (u == null) return;
+
+                // bill id is required here
+                int billId = parseInt(req.getParameter("id"));
+                if (billId <= 0) { resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Missing bill id"); return; }
+
+                try {
+                    Bill b = svc.get(billId);
+                    if (b == null) { resp.sendError(HttpServletResponse.SC_NOT_FOUND, "Bill not found"); return; }
+                    Customer c = (b.getCustomerId()==null) ? null :
+                            customerDAO.findById(b.getCustomerId()).orElse(null);
+
+                    req.setAttribute("bill", b);
+                    req.setAttribute("customer", c);
+                    req.getRequestDispatcher("/staff/receipt.jsp").forward(req, resp);
+                } catch (SQLException e) {
+                    throw new ServletException(e);
+                }
+                return;
+            }
             default:
                 resp.sendError(HttpServletResponse.SC_NOT_FOUND);
         }
     }
 
+    /** Start a brand-new draft bill and go to /billing */
     private void startNew(HttpServletRequest req, HttpServletResponse resp)
             throws IOException, ServletException {
 
@@ -91,12 +117,13 @@ public class BillingController extends HttpServlet {
             }
             Bill b = svc.get(billId);
 
+            // show currently attached customer (if any)
             Customer current = null;
             if (b != null && b.getCustomerId() != null) {
                 current = customerDAO.findById(b.getCustomerId()).orElse(null);
             }
 
-            // optional: quick search for customers (name/phone/account/email)
+            // optional quick search for customers by q (name/phone/email/account)
             String q = trim(req.getParameter("q"));
             if (q != null && q.length() >= 2) {
                 req.setAttribute("matches", customerDAO.search(q));
@@ -111,6 +138,7 @@ public class BillingController extends HttpServlet {
         } catch (SQLException e) { throw new ServletException(e); }
     }
 
+    // ---------- POST ----------
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp)
             throws IOException, ServletException {
@@ -181,7 +209,7 @@ public class BillingController extends HttpServlet {
                     return;
                 }
                 case "/billing/finalize": {
-                    // --- NEW: amount vs percentage discount handling ---
+                    // --- amount vs percentage discount handling ---
                     Bill current = svc.get(billId);
                     double subtotal = (current != null) ? current.getSubTotal() : 0.0;
 
@@ -195,14 +223,13 @@ public class BillingController extends HttpServlet {
                     } else {
                         discountAmt = amtInput;
                     }
-                    // guard rails
                     if (discountAmt < 0) discountAmt = 0;
                     if (discountAmt > subtotal) discountAmt = subtotal;
 
                     String method = trim(req.getParameter("paymentMethod"));
-                    svc.finalizeBill(billId, discountAmt, method);
+                    svc.finalizeBill(billId, discountAmt, method); // sets status='FINAL' + totals
 
-                    // Build PDF & try printing or at least save to uploads
+                    // Build receipt PDF and: save to /uploads/receipts; try to print.
                     Bill b = svc.get(billId);
                     Customer c = (b.getCustomerId()==null) ? null :
                             customerDAO.findById(b.getCustomerId()).orElse(null);
@@ -212,12 +239,13 @@ public class BillingController extends HttpServlet {
                     boolean printed = tryPrint(pdf, req.getParameter("printer"));
 
                     s.removeAttribute("draftBillId");
-                    // After finalize, go to dashboard if requested; else show receipt
                     String goDash = req.getParameter("goDashboard");
                     if ("1".equals(goDash)) {
                         resp.sendRedirect(req.getContextPath()+"/dashboard?msg=Bill+saved");
                     } else {
-                        resp.sendRedirect(req.getContextPath()+"/billing/receipt.pdf?id="+b.getBillId()+"&msg="+(printed?"Printed":"Saved+PDF"));
+                        // go to HTML receipt actions page
+                        resp.sendRedirect(req.getContextPath()+"/billing/receipt?id="+b.getBillId()+
+                                "&msg="+(printed?"Printed":"Saved+PDF"));
                     }
                     return;
                 }
@@ -233,7 +261,14 @@ public class BillingController extends HttpServlet {
         } catch (SQLException e) { throw new ServletException(e); }
     }
 
-    // ----- helpers -----
+    // ---------- helpers ----------
+    private User requireLogin(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        HttpSession s = req.getSession(false);
+        User u = (s==null) ? null : (User) s.getAttribute("user");
+        if (u == null) { resp.sendRedirect(req.getContextPath()+"/login"); return null; }
+        return u;
+    }
+
     private int parseInt(String s){ try { return Integer.parseInt(s); } catch(Exception e){ return 0; } }
     private double parseDouble(String s){ try { return Double.parseDouble(s); } catch(Exception e){ return 0; } }
     private String trim(String s){ return (s==null)? null : s.trim(); }

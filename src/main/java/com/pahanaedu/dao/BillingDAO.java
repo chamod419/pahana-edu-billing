@@ -64,7 +64,7 @@ public class BillingDAO {
         }
     }
 
-    // ---------- Items on bill (Java manages stock + snapshots) ----------
+    // ---------- Items on bill (no DB triggers; Java manages stock + snapshots) ----------
     public void addLine(int billId, int itemId, int qty) throws SQLException {
         final String getItem = "SELECT name, unitPrice, isActive, stockQty FROM items WHERE itemId=?";
         final String decStock = "UPDATE items SET stockQty = stockQty - ? WHERE itemId=? AND stockQty >= ?";
@@ -101,8 +101,6 @@ public class BillingDAO {
                         ins.setDouble(6, price * qty);
                         ins.executeUpdate();
                     }
-
-                    touchActiveStatus(c, itemId);
                 }
             }
             c.commit();
@@ -143,7 +141,6 @@ public class BillingDAO {
                     up.setInt(2, itemId);
                     up.executeUpdate();
                 }
-                touchActiveStatus(c, itemId);
             }
 
             c.commit();
@@ -179,21 +176,20 @@ public class BillingDAO {
 
             int diff = newQty - oldQty;
             if (itemId != null && diff != 0) {
-                if (diff > 0) {
+                if (diff > 0) { // need more stock
                     try (PreparedStatement d = c.prepareStatement(decStock)) {
                         d.setInt(1, diff);
                         d.setInt(2, itemId);
                         d.setInt(3, diff);
                         if (d.executeUpdate() != 1) { c.rollback(); throw new SQLException("Not enough stock"); }
                     }
-                } else {
+                } else { // return stock
                     try (PreparedStatement i = c.prepareStatement(incStock)) {
                         i.setInt(1, -diff);
                         i.setInt(2, itemId);
                         i.executeUpdate();
                     }
                 }
-                touchActiveStatus(c, itemId);
             }
 
             try (PreparedStatement s = c.prepareStatement(setQty)) {
@@ -223,7 +219,7 @@ public class BillingDAO {
     }
 
     public void applyDiscountAndMethod(int billId, double discountAmt, String method) throws SQLException {
-        final String up = "UPDATE bills SET discountAmt=?, paymentMethod=? WHERE billId=?";
+        final String up = "UPDATE bills SET discountAmt=?, paymentMethod=?, status='FINAL' WHERE billId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
              PreparedStatement ps = c.prepareStatement(up)) {
             ps.setDouble(1, Math.max(0, discountAmt));
@@ -236,7 +232,7 @@ public class BillingDAO {
 
     // ---------- Load bill ----------
     public Bill getBill(int billId) throws SQLException {
-        final String sql = "SELECT billId,billNo,billDate,customerId,createdBy,subTotal,discountAmt,netTotal,paidAmount,paymentMethod,notes " +
+        final String sql = "SELECT billId,billNo,billDate,customerId,createdBy,subTotal,discountAmt,netTotal,paidAmount,paymentMethod,notes,status " +
                            "FROM bills WHERE billId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -256,6 +252,7 @@ public class BillingDAO {
                     b.setPaidAmount(rs.getDouble("paidAmount"));
                     b.setPaymentMethod(rs.getString("paymentMethod"));
                     b.setNotes(rs.getString("notes"));
+                    // (optional) keep status if you add it to model later
                     b.setItems(listLines(billId));
                     return b;
                 }
@@ -311,7 +308,6 @@ public class BillingDAO {
                                 up.setInt(2, iid);
                                 up.executeUpdate();
                             }
-                            touchActiveStatus(c, iid);
                         }
                     }
                 }
@@ -322,13 +318,6 @@ public class BillingDAO {
         }
     }
 
+    // convenience alias
     public Bill loadBill(int billId) throws SQLException { return getBill(billId); }
-
-    // ---------- helper ----------
-    private void touchActiveStatus(Connection c, int itemId) throws SQLException {
-        try (PreparedStatement p = c.prepareStatement("UPDATE items SET isActive = (stockQty > 0) WHERE itemId=?")) {
-            p.setInt(1, itemId);
-            p.executeUpdate();
-        }
-    }
 }
