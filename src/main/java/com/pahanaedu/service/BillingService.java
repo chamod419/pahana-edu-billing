@@ -2,10 +2,8 @@ package com.pahanaedu.service;
 
 import com.pahanaedu.dao.BillingDAO;
 import com.pahanaedu.model.Bill;
-import com.pahanaedu.model.BillItem;
 
 import java.sql.SQLException;
-import java.util.List;
 
 public class BillingService {
     private final BillingDAO dao = new BillingDAO();
@@ -14,8 +12,21 @@ public class BillingService {
         return dao.createDraft(customerId, userId);
     }
 
+    public void setCustomer(int billId, Integer customerId) throws SQLException {
+        dao.setCustomer(billId, customerId);
+    }
+
+    public void setNotes(int billId, String notes) throws SQLException {
+        dao.setNotes(billId, notes);
+    }
+
     public void addItem(int billId, int itemId, int qty) throws SQLException {
         dao.addLine(billId, itemId, qty);
+        dao.recomputeTotals(billId);
+    }
+
+    public void updateQty(int billItemId, int qty, int billId) throws SQLException {
+        dao.updateQty(billItemId, qty, billId);
         dao.recomputeTotals(billId);
     }
 

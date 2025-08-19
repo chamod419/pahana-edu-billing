@@ -33,3 +33,4 @@ public class BillItem {
     // Compatibility for PdfReceiptUtil
     public double getSubTotal() { return lineTotal; }
 }
+

@@ -69,29 +69,35 @@ public class PdfReceiptUtil {
                 t.addCell(cellLeft(bi.getItemName(), false));
                 t.addCell(cellRight(String.valueOf(bi.getQty()), false));
                 t.addCell(cellRight(fmt(bi.getUnitPrice()), false));
-                t.addCell(cellRight(fmt(bi.getSubTotal()), false));
+                t.addCell(cellRight(fmt(bi.getSubTotal()), false)); // line total
             }
             doc.add(t);
 
             // Totals
             doc.add(new LineSeparator(new SolidLine(0.5f)));
 
+            double gross = bill.getSubTotal();          // <- use existing getters
+            double discAmt = bill.getDiscountAmt();     // (flat Rs)
+            double pct = (gross <= 0) ? 0 : (discAmt * 100.0 / gross);
+
             Table tot = new Table(UnitValue.createPointArray(new float[]{100, 90}))
                     .setHorizontalAlignment(HorizontalAlignment.RIGHT)
                     .setWidth(UnitValue.createPointValue(190));
 
-            tot.addCell(kv("Gross", fmt(bill.getGrossTotal())));
-            double pct = bill.getDiscountPct(); // percent shown; amount saved in bill.getDiscount()
+            tot.addCell(kv("Gross", fmt(gross)));
             String dlabel = (pct > 0) ? "Discount (" + trimZeros(pct) + "%)" : "Discount";
-            tot.addCell(kv(dlabel, fmt(bill.getDiscount())));
+            tot.addCell(kv(dlabel, fmt(discAmt)));
             tot.addCell(kvBold("Net Total", fmt(bill.getNetTotal())));
 
             doc.add(tot);
 
-            if (!nz(bill.getNotes()).isEmpty()) {
-                doc.add(new Paragraph("Notes: " + bill.getNotes())
-                        .setFontSize(8).setMarginTop(6));
-            }
+            // Optional notes (ignore if Bill has no notes getter)
+            try {
+                String notes = bill.getNotes();
+                if (notes != null && !notes.isBlank()) {
+                    doc.add(new Paragraph("Notes: " + notes).setFontSize(8).setMarginTop(6));
+                }
+            } catch (Throwable ignore) { /* notes not present — safe to skip */ }
 
             doc.add(new LineSeparator(new SolidLine(0.5f)));
             doc.add(new Paragraph("Thank you!")
@@ -121,11 +127,13 @@ public class PdfReceiptUtil {
         if (bold) p.setBold();
         return new Cell().add(p).setTextAlignment(TextAlignment.LEFT).setBorder(Border.NO_BORDER);
     }
+
     private static Cell cellRight(String text, boolean bold) {
         Paragraph p = new Paragraph(nz(text)).setFontSize(8);
         if (bold) p.setBold();
         return new Cell().add(p).setTextAlignment(TextAlignment.RIGHT).setBorder(Border.NO_BORDER);
     }
+
     private static Cell kv(String k, String v) {
         Cell c = new Cell(1,2).setBorder(Border.NO_BORDER);
         c.add(new Paragraph(k).setFontSize(8));
@@ -133,6 +141,7 @@ public class PdfReceiptUtil {
         c.add(pv);
         return c;
     }
+
     private static Cell kvBold(String k, String v) {
         Cell c = new Cell(1,2).setBorder(Border.NO_BORDER);
         c.add(new Paragraph(k).setBold().setFontSize(10));

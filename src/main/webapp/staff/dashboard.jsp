@@ -27,7 +27,7 @@
   </div>
 
   <p style="margin-top:20px;">
-    <a href="${pageContext.request.contextPath}/billing/new">Generate Bill</a> |
+    <a class="btn" href="${pageContext.request.contextPath}/billing/new">Generate Bill</a> |
     <a href="${pageContext.request.contextPath}/customers">Customers</a>
     <a href="${pageContext.request.contextPath}/items">Manage Items</a>
     <a href="${pageContext.request.contextPath}/logout">Logout</a>
