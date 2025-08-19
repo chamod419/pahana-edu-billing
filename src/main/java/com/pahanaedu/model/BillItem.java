@@ -3,9 +3,9 @@ package com.pahanaedu.model;
 public class BillItem {
     private int billItemId;
     private int billId;
-    private Integer itemId;     // nullable after delete
-    private String itemName;    // snapshot
-    private double unitPrice;   // snapshot
+    private Integer itemId;
+    private String itemName;
+    private double unitPrice;
     private int qty;
     private double lineTotal;
 
@@ -30,7 +30,5 @@ public class BillItem {
     public double getLineTotal() { return lineTotal; }
     public void setLineTotal(double lineTotal) { this.lineTotal = lineTotal; }
 
-    // Compatibility for PdfReceiptUtil
     public double getSubTotal() { return lineTotal; }
 }
-

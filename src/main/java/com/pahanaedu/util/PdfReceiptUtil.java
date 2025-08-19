@@ -7,10 +7,7 @@ import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.kernel.pdf.canvas.draw.SolidLine;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.borders.Border;
-import com.itextpdf.layout.element.Cell;
-import com.itextpdf.layout.element.LineSeparator;
-import com.itextpdf.layout.element.Paragraph;
-import com.itextpdf.layout.element.Table;
+import com.itextpdf.layout.element.*;
 import com.itextpdf.layout.properties.HorizontalAlignment;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
@@ -24,8 +21,7 @@ import java.time.format.DateTimeFormatter;
 
 public class PdfReceiptUtil {
 
-    /** ~80mm paper width in points (72pt/inch). */
-    private static final float PAGE_WIDTH_PT = 226.8f;
+    private static final float PAGE_WIDTH_PT = 226.8f; // ~80mm
     private static final float MARGIN = 10f;
 
     public static byte[] buildReceiptPdf(Bill bill, Customer customer) {
@@ -33,17 +29,12 @@ public class PdfReceiptUtil {
 
             PdfWriter writer = new PdfWriter(baos);
             PdfDocument pdf = new PdfDocument(writer);
-            PageSize roll = new PageSize(PAGE_WIDTH_PT, PageSize.A4.getHeight()); // tall enough
+            PageSize roll = new PageSize(PAGE_WIDTH_PT, PageSize.A4.getHeight());
             Document doc = new Document(pdf, roll);
             doc.setMargins(MARGIN, MARGIN, MARGIN, MARGIN);
 
-            // Header
-            Paragraph brand = new Paragraph("PahanaEdu")
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setBold().setFontSize(12);
-            Paragraph title = new Paragraph("Receipt")
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setFontSize(9).setMarginTop(0).setMarginBottom(4);
+            Paragraph brand = new Paragraph("PahanaEdu").setTextAlignment(TextAlignment.CENTER).setBold().setFontSize(12);
+            Paragraph title = new Paragraph("Receipt").setTextAlignment(TextAlignment.CENTER).setFontSize(9).setMarginTop(0).setMarginBottom(4);
 
             String custLine = (customer != null)
                     ? String.format("%s (%s)", nz(customer.getName()), nz(customer.getAccountNumber()))
@@ -60,8 +51,7 @@ public class PdfReceiptUtil {
             doc.add(meta);
             doc.add(new LineSeparator(new SolidLine(0.5f)));
 
-            // Items
-            float[] cols = { 70, 30, 40, 50 }; // Name, Qty, Unit, Subtotal
+            float[] cols = { 70, 30, 40, 50 };
             Table t = new Table(UnitValue.createPointArray(cols)).useAllAvailableWidth();
             addHeader(t, "Item", "Qty", "Unit", "Subtotal");
 
@@ -69,15 +59,14 @@ public class PdfReceiptUtil {
                 t.addCell(cellLeft(bi.getItemName(), false));
                 t.addCell(cellRight(String.valueOf(bi.getQty()), false));
                 t.addCell(cellRight(fmt(bi.getUnitPrice()), false));
-                t.addCell(cellRight(fmt(bi.getSubTotal()), false)); // line total
+                t.addCell(cellRight(fmt(bi.getSubTotal()), false));
             }
             doc.add(t);
 
-            // Totals
             doc.add(new LineSeparator(new SolidLine(0.5f)));
 
-            double gross = bill.getSubTotal();          // <- use existing getters
-            double discAmt = bill.getDiscountAmt();     // (flat Rs)
+            double gross = bill.getSubTotal();
+            double discAmt = bill.getDiscountAmt();
             double pct = (gross <= 0) ? 0 : (discAmt * 100.0 / gross);
 
             Table tot = new Table(UnitValue.createPointArray(new float[]{100, 90}))
@@ -88,22 +77,15 @@ public class PdfReceiptUtil {
             String dlabel = (pct > 0) ? "Discount (" + trimZeros(pct) + "%)" : "Discount";
             tot.addCell(kv(dlabel, fmt(discAmt)));
             tot.addCell(kvBold("Net Total", fmt(bill.getNetTotal())));
-
             doc.add(tot);
 
-            // Optional notes (ignore if Bill has no notes getter)
-            try {
-                String notes = bill.getNotes();
-                if (notes != null && !notes.isBlank()) {
-                    doc.add(new Paragraph("Notes: " + notes).setFontSize(8).setMarginTop(6));
-                }
-            } catch (Throwable ignore) { /* notes not present — safe to skip */ }
+            String notes = bill.getNotes();
+            if (notes != null && !notes.isBlank()) {
+                doc.add(new Paragraph("Notes: " + notes).setFontSize(8).setMarginTop(6));
+            }
 
             doc.add(new LineSeparator(new SolidLine(0.5f)));
-            doc.add(new Paragraph("Thank you!")
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setFontSize(9)
-                    .setMarginTop(6));
+            doc.add(new Paragraph("Thank you!").setTextAlignment(TextAlignment.CENTER).setFontSize(9).setMarginTop(6));
 
             doc.close();
             return baos.toByteArray();
@@ -121,19 +103,16 @@ public class PdfReceiptUtil {
                     .setBackgroundColor(ColorConstants.LIGHT_GRAY));
         }
     }
-
     private static Cell cellLeft(String text, boolean bold) {
         Paragraph p = new Paragraph(nz(text)).setFontSize(8);
         if (bold) p.setBold();
         return new Cell().add(p).setTextAlignment(TextAlignment.LEFT).setBorder(Border.NO_BORDER);
     }
-
     private static Cell cellRight(String text, boolean bold) {
         Paragraph p = new Paragraph(nz(text)).setFontSize(8);
         if (bold) p.setBold();
         return new Cell().add(p).setTextAlignment(TextAlignment.RIGHT).setBorder(Border.NO_BORDER);
     }
-
     private static Cell kv(String k, String v) {
         Cell c = new Cell(1,2).setBorder(Border.NO_BORDER);
         c.add(new Paragraph(k).setFontSize(8));
@@ -141,7 +120,6 @@ public class PdfReceiptUtil {
         c.add(pv);
         return c;
     }
-
     private static Cell kvBold(String k, String v) {
         Cell c = new Cell(1,2).setBorder(Border.NO_BORDER);
         c.add(new Paragraph(k).setBold().setFontSize(10));

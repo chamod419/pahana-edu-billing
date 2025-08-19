@@ -64,7 +64,7 @@ public class BillingDAO {
         }
     }
 
-    // ---------- Items on bill (no DB triggers; Java manages stock + snapshots) ----------
+    // ---------- Items on bill (Java manages stock + snapshots) ----------
     public void addLine(int billId, int itemId, int qty) throws SQLException {
         final String getItem = "SELECT name, unitPrice, isActive, stockQty FROM items WHERE itemId=?";
         final String decStock = "UPDATE items SET stockQty = stockQty - ? WHERE itemId=? AND stockQty >= ?";
@@ -101,11 +101,11 @@ public class BillingDAO {
                         ins.setDouble(6, price * qty);
                         ins.executeUpdate();
                     }
+
+                    touchActiveStatus(c, itemId);
                 }
             }
             c.commit();
-        } catch (SQLException ex) {
-            throw ex;
         }
     }
 
@@ -127,7 +127,7 @@ public class BillingDAO {
                         if (!rs.wasNull()) itemId = iid;
                         qty = rs.getInt("qty");
                     } else {
-                        c.rollback(); return; // nothing to delete
+                        c.rollback(); return;
                     }
                 }
             }
@@ -143,10 +143,11 @@ public class BillingDAO {
                     up.setInt(2, itemId);
                     up.executeUpdate();
                 }
+                touchActiveStatus(c, itemId);
             }
 
             c.commit();
-        } catch (SQLException ex) { throw ex; }
+        }
     }
 
     public void updateQty(int billItemId, int newQty, int billId) throws SQLException {
@@ -192,6 +193,7 @@ public class BillingDAO {
                         i.executeUpdate();
                     }
                 }
+                touchActiveStatus(c, itemId);
             }
 
             try (PreparedStatement s = c.prepareStatement(setQty)) {
@@ -202,7 +204,7 @@ public class BillingDAO {
             }
 
             c.commit();
-        } catch (SQLException ex) { throw ex; }
+        }
     }
 
     // ---------- Totals / finalize ----------
@@ -309,6 +311,7 @@ public class BillingDAO {
                                 up.setInt(2, iid);
                                 up.executeUpdate();
                             }
+                            touchActiveStatus(c, iid);
                         }
                     }
                 }
@@ -316,9 +319,16 @@ public class BillingDAO {
             try (PreparedStatement d1 = c.prepareStatement(delItems)) { d1.setInt(1, billId); d1.executeUpdate(); }
             try (PreparedStatement d2 = c.prepareStatement(delBill )) { d2.setInt(1, billId); d2.executeUpdate(); }
             c.commit();
-        } catch (SQLException ex) { throw ex; }
+        }
     }
 
-    // convenience alias
     public Bill loadBill(int billId) throws SQLException { return getBill(billId); }
+
+    // ---------- helper ----------
+    private void touchActiveStatus(Connection c, int itemId) throws SQLException {
+        try (PreparedStatement p = c.prepareStatement("UPDATE items SET isActive = (stockQty > 0) WHERE itemId=?")) {
+            p.setInt(1, itemId);
+            p.executeUpdate();
+        }
+    }
 }

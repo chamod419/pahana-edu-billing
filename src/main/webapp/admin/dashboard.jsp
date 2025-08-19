@@ -320,7 +320,7 @@
                     <span class="nav-icon">📊</span>
                     <span>View Reports</span>
                 </a>
-                <a href="${ctx}/billing/new" class="nav-link primary">
+                <a href="${pageContext.request.contextPath}/billing/new" class="nav-link primary">
                     <span class="nav-icon">💳</span>
                     <span>Generate Bill</span>
                 </a>

@@ -9,10 +9,8 @@ import java.util.Optional;
 
 public class CustomerDAO {
 
-    // ---------- Queries ----------
     public List<Customer> findAll() {
-        String sql = "SELECT customerId,accountNumber,name,address,phone,email,status " +
-                     "FROM customers ORDER BY customerId DESC";
+        String sql = "SELECT customerId,accountNumber,name,address,phone,email,status FROM customers ORDER BY customerId DESC";
         List<Customer> out = new ArrayList<>();
         try (Connection c = DBConnection.getInstance().getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
@@ -22,10 +20,8 @@ public class CustomerDAO {
         return out;
     }
 
-    /** Only ACTIVE customers (useful for dropdowns etc.) */
     public List<Customer> findActive() {
-        String sql = "SELECT customerId,accountNumber,name,address,phone,email,status " +
-                     "FROM customers WHERE status='ACTIVE' ORDER BY name";
+        String sql = "SELECT customerId,accountNumber,name,address,phone,email,status FROM customers WHERE status='ACTIVE' ORDER BY name";
         List<Customer> out = new ArrayList<>();
         try (Connection c = DBConnection.getInstance().getConnection();
              PreparedStatement ps = c.prepareStatement(sql);
@@ -35,14 +31,14 @@ public class CustomerDAO {
         return out;
     }
 
-    /** Simple search across multiple fields. */
+    /** Search by name OR phone OR accountNumber (case-insensitive) */
     public List<Customer> search(String q) {
         if (q == null) q = "";
         String like = "%" + q.toLowerCase().trim() + "%";
         String sql = "SELECT customerId,accountNumber,name,address,phone,email,status " +
-                     "FROM customers " +
-                     "WHERE LOWER(name) LIKE ? OR LOWER(phone) LIKE ? OR LOWER(email) LIKE ? OR LOWER(accountNumber) LIKE ? " +
-                     "ORDER BY customerId DESC";
+                "FROM customers " +
+                "WHERE LOWER(name) LIKE ? OR LOWER(phone) LIKE ? OR LOWER(email) LIKE ? OR LOWER(accountNumber) LIKE ? " +
+                "ORDER BY customerId DESC";
         List<Customer> out = new ArrayList<>();
         try (Connection c = DBConnection.getInstance().getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -58,8 +54,7 @@ public class CustomerDAO {
     }
 
     public Optional<Customer> findById(int id) {
-        String sql = "SELECT customerId,accountNumber,name,address,phone,email,status " +
-                     "FROM customers WHERE customerId=?";
+        String sql = "SELECT customerId,accountNumber,name,address,phone,email,status FROM customers WHERE customerId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, id);
@@ -70,11 +65,9 @@ public class CustomerDAO {
         return Optional.empty();
     }
 
-    /** Find by Account Number (e.g. C-0001) – used by billing to link a draft. */
     public Optional<Customer> findByAccountNumber(String acc) {
         if (acc == null || acc.isBlank()) return Optional.empty();
-        String sql = "SELECT customerId,accountNumber,name,address,phone,email,status " +
-                     "FROM customers WHERE accountNumber=?";
+        String sql = "SELECT customerId,accountNumber,name,address,phone,email,status FROM customers WHERE accountNumber=?";
         try (Connection c = DBConnection.getInstance().getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, acc.trim());
@@ -85,14 +78,9 @@ public class CustomerDAO {
         return Optional.empty();
     }
 
-    // ---------- Mutations ----------
-    /**
-     * Insert with auto accountNumber generation if missing.
-     * Retries a few times if UNIQUE constraint collides under concurrency.
-     */
+    // --- mutations & helpers (unchanged from earlier) ---
     public boolean insert(Customer x) {
         try (Connection c = DBConnection.getInstance().getConnection()) {
-            // Try a few times in case the generated code clashes
             for (int attempt = 0; attempt < 3; attempt++) {
                 if (x.getAccountNumber() == null || x.getAccountNumber().isBlank()) {
                     x.setAccountNumber(nextAccountNumber(c));
@@ -113,13 +101,8 @@ public class CustomerDAO {
                         return true;
                     }
                 } catch (SQLException e) {
-                    // 23000 = integrity constraint violation (e.g. duplicate accountNumber)
-                    if ("23000".equals(e.getSQLState())) {
-                        x.setAccountNumber(null); // regenerate and retry
-                        continue;
-                    }
-                    e.printStackTrace();
-                    return false;
+                    if ("23000".equals(e.getSQLState())) { x.setAccountNumber(null); continue; }
+                    e.printStackTrace(); return false;
                 }
             }
         } catch (SQLException e) { e.printStackTrace(); return false; }
@@ -132,9 +115,7 @@ public class CustomerDAO {
                 x.setAccountNumber(nextAccountNumber(c));
             } catch (SQLException e) { e.printStackTrace(); return false; }
         }
-
-        String sql = "UPDATE customers SET accountNumber=?, name=?, address=?, phone=?, email=?, status=? " +
-                     "WHERE customerId=?";
+        String sql = "UPDATE customers SET accountNumber=?, name=?, address=?, phone=?, email=?, status=? WHERE customerId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, x.getAccountNumber());
@@ -148,7 +129,6 @@ public class CustomerDAO {
         } catch (SQLException e) { e.printStackTrace(); return false; }
     }
 
-    /** Safe delete: null-out bills.customerId (transaction) then delete customer. */
     public boolean deleteSafe(int id) {
         try (Connection c = DBConnection.getInstance().getConnection()) {
             c.setAutoCommit(false);
@@ -160,16 +140,11 @@ public class CustomerDAO {
                 c.commit();
                 return n > 0;
             } catch (SQLException ex) {
-                c.rollback();
-                ex.printStackTrace();
-                return false;
-            } finally {
-                c.setAutoCommit(true);
-            }
+                c.rollback(); ex.printStackTrace(); return false;
+            } finally { c.setAutoCommit(true); }
         } catch (SQLException e) { e.printStackTrace(); return false; }
     }
 
-    /** Plain delete (FK is ON DELETE SET NULL so this will usually work too). */
     public boolean delete(int id) {
         String sql = "DELETE FROM customers WHERE customerId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
@@ -179,7 +154,6 @@ public class CustomerDAO {
         } catch (SQLException e) { e.printStackTrace(); return false; }
     }
 
-    /** How many bills currently reference this customer. */
     public int countUsageInBills(int customerId) {
         String sql = "SELECT COUNT(*) FROM bills WHERE customerId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
@@ -192,7 +166,6 @@ public class CustomerDAO {
         return 0;
     }
 
-    // ---------- Helpers ----------
     private Customer map(ResultSet rs) throws SQLException {
         Customer c = new Customer();
         c.setCustomerId(rs.getInt("customerId"));
@@ -207,7 +180,6 @@ public class CustomerDAO {
 
     private String nullIfBlank(String s) { return (s==null || s.isBlank()) ? null : s; }
 
-    /** Generate next code like C-0001, C-0002 ... (simple; retried on duplicates). */
     private String nextAccountNumber(Connection c) throws SQLException {
         String sql = "SELECT LPAD(COALESCE(MAX(CAST(SUBSTRING(accountNumber,3) AS UNSIGNED)),0) + 1, 4, '0') AS nxt " +
                      "FROM customers WHERE accountNumber LIKE 'C-%'";
