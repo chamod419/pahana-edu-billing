@@ -16,30 +16,90 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e293b 0%, #0f766e 25%, #2563eb 50%, #1e3a8a 75%, #166534 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 75% 75%, rgba(245, 158, 11, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.08) 0%, transparent 50%);
+            animation: floating 20s ease-in-out infinite;
+        }
+
+        body::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="books" width="40" height="40" patternUnits="userSpaceOnUse"><rect x="5" y="15" width="8" height="20" fill="rgba(245,158,11,0.03)" rx="1"/><rect x="15" y="12" width="6" height="23" fill="rgba(16,185,129,0.03)" rx="1"/><rect x="23" y="18" width="7" height="17" fill="rgba(37,99,235,0.03)" rx="1"/><rect x="32" y="14" width="5" height="21" fill="rgba(255,255,255,0.02)" rx="1"/></pattern></defs><rect width="100" height="100" fill="url(%23books)"/></svg>') repeat;
+            animation: bookPattern 30s linear infinite;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes floating {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            33% { transform: translateY(-10px) rotate(1deg); }
+            66% { transform: translateY(5px) rotate(-1deg); }
+        }
+
+        @keyframes bookPattern {
+            0% { transform: translateX(0) translateY(0); }
+            100% { transform: translateX(-40px) translateY(-40px); }
         }
 
         .login-container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            box-shadow: 
+                0 25px 50px rgba(0, 0, 0, 0.15),
+                0 0 0 1px rgba(255, 255, 255, 0.1) inset;
             overflow: hidden;
             width: 100%;
-            max-width: 400px;
+            max-width: 420px;
             position: relative;
+            transform: translateY(0);
+            animation: cardFloat 6s ease-in-out infinite;
+        }
+
+        @keyframes cardFloat {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-5px) scale(1.01); }
         }
 
         .login-header {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-            padding: 40px 30px 30px;
+            background: linear-gradient(135deg, #1e293b 0%, #0f766e 50%, #1e3a8a 100%);
+            padding: 45px 35px 35px;
             text-align: center;
             color: white;
             position: relative;
+            overflow: hidden;
         }
 
         .login-header::before {
@@ -49,28 +109,45 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="50" cy="10" r="0.5" fill="rgba(255,255,255,0.05)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-            opacity: 0.3;
+            background: 
+                radial-gradient(circle at 30% 20%, rgba(245, 158, 11, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+                linear-gradient(45deg, transparent 30%, rgba(255, 255, 255, 0.05) 50%, transparent 70%);
+            animation: headerShimmer 8s ease-in-out infinite;
+        }
+
+        @keyframes headerShimmer {
+            0%, 100% { opacity: 1; transform: translateX(0); }
+            50% { opacity: 0.8; transform: translateX(10px); }
         }
 
         .logo {
-            width: 80px;
-            height: 80px;
+            width: 90px;
+            height: 90px;
             margin: 0 auto 20px;
             background: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
             position: relative;
             z-index: 1;
+            padding: 10px;
         }
 
         .logo img {
             max-width: 60px;
             max-height: 60px;
             object-fit: contain;
+        }
+
+        .logo-fallback {
+            display: none;
+            color: #1e293b;
+            font-size: 28px;
+            font-weight: bold;
+            font-family: 'Segoe UI', sans-serif;
         }
 
         .login-title {
@@ -137,9 +214,9 @@
 
         .form-input:focus {
             outline: none;
-            border-color: #4f46e5;
+            border-color: #0f766e;
             background-color: white;
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+            box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
         }
 
         .form-input:hover {
@@ -149,26 +226,30 @@
 
         .login-button {
             width: 100%;
-            padding: 14px 20px;
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            padding: 16px 24px;
+            background: linear-gradient(135deg, #1e293b 0%, #0f766e 50%, #1e3a8a 100%);
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
+            box-shadow: 0 4px 15px rgba(30, 41, 59, 0.3);
         }
 
         .login-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(79, 70, 229, 0.3);
+            transform: translateY(-3px);
+            box-shadow: 
+                0 8px 25px rgba(30, 41, 59, 0.4),
+                0 0 20px rgba(15, 118, 110, 0.3);
+            background: linear-gradient(135deg, #334155 0%, #14b8a6 50%, #3b82f6 100%);
         }
 
         .login-button:active {
-            transform: translateY(0);
+            transform: translateY(-1px);
         }
 
         .login-button::before {
@@ -178,8 +259,8 @@
             left: -100%;
             width: 100%;
             height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-            transition: left 0.5s;
+            background: linear-gradient(90deg, transparent, rgba(245, 158, 11, 0.4), transparent);
+            transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .login-button:hover::before {
@@ -189,7 +270,7 @@
         .login-footer {
             text-align: center;
             padding: 20px 30px;
-            background-color: #f9fafb;
+            background-color: rgba(249, 250, 251, 0.8);
             font-size: 12px;
             color: #6b7280;
         }
@@ -200,7 +281,7 @@
             }
             
             .login-header {
-                padding: 30px 20px 25px;
+                padding: 35px 25px 30px;
             }
             
             .login-form {
@@ -209,6 +290,11 @@
             
             .login-title {
                 font-size: 24px;
+            }
+
+            .logo {
+                width: 80px;
+                height: 80px;
             }
         }
 
@@ -242,8 +328,9 @@
     <div class="login-container">
         <div class="login-header">
             <div class="logo">
-                <img src="${pageContext.request.contextPath}/images/Pahanaedu.png" alt="PahanaEdu Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
-                <div style="display: none; color: #4f46e5; font-size: 24px; font-weight: bold;">PE</div>
+                <img src="${pageContext.request.contextPath}/images/Pahanaedu.png" alt="PahanaEdu Logo" 
+                     onerror="this.style.display='none'; this.parentNode.querySelector('.logo-fallback').style.display='block';">
+                <div class="logo-fallback">PE</div>
             </div>
             <h1 class="login-title">Welcome Back</h1>
             <p class="login-subtitle">Sign in to your PahanaEdu account</p>
@@ -265,12 +352,14 @@
 
                 <div class="form-group">
                     <label for="username" class="form-label">Username</label>
-                    <input id="username" name="username" class="form-input" type="text" required autocomplete="username" placeholder="Enter your username">
+                    <input id="username" name="username" class="form-input" type="text" required 
+                           autocomplete="username" placeholder="Enter your username">
                 </div>
 
                 <div class="form-group">
                     <label for="password" class="form-label">Password</label>
-                    <input id="password" name="password" class="form-input" type="password" required autocomplete="current-password" placeholder="Enter your password">
+                    <input id="password" name="password" class="form-input" type="password" required 
+                           autocomplete="current-password" placeholder="Enter your password">
                 </div>
 
                 <button type="submit" class="login-button" id="loginBtn">
@@ -302,6 +391,23 @@
         // Focus first input on page load
         window.addEventListener('load', function() {
             document.getElementById('username').focus();
+        });
+
+        // Enhanced logo error handling
+        document.addEventListener('DOMContentLoaded', function() {
+            const logoImg = document.querySelector('.logo img');
+            const logoFallback = document.querySelector('.logo-fallback');
+            
+            // Check if image loads successfully
+            logoImg.addEventListener('load', function() {
+                console.log('PahanaEdu logo loaded successfully');
+            });
+            
+            logoImg.addEventListener('error', function() {
+                console.log('Logo failed to load, showing fallback');
+                this.style.display = 'none';
+                logoFallback.style.display = 'block';
+            });
         });
     </script>
 </body>
