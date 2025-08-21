@@ -38,8 +38,11 @@ public class BillingDAO {
                     }
                 }
             } catch (SQLException ex) {
-                c.rollback(); throw ex;
-            } finally { c.setAutoCommit(true); }
+                c.rollback();
+                throw ex;
+            } finally {
+                c.setAutoCommit(true);
+            }
         }
     }
 
@@ -64,9 +67,9 @@ public class BillingDAO {
         }
     }
 
-    // ---------- Items on bill (no DB triggers; Java manages stock + snapshots) ----------
+    // ---------- Items on bill (Java manages stock + snapshots) ----------
     public void addLine(int billId, int itemId, int qty) throws SQLException {
-        final String getItem = "SELECT name, unitPrice, isActive, stockQty FROM items WHERE itemId=?";
+        final String getItem  = "SELECT name, unitPrice, isActive, stockQty FROM items WHERE itemId=?";
         final String decStock = "UPDATE items SET stockQty = stockQty - ? WHERE itemId=? AND stockQty >= ?";
         final String insLine  = "INSERT INTO bill_items (billId,itemId,itemName,unitPrice,qty,lineTotal) VALUES (?,?,?,?,?,?)";
 
@@ -76,10 +79,10 @@ public class BillingDAO {
                 gp.setInt(1, itemId);
                 try (ResultSet rs = gp.executeQuery()) {
                     if (!rs.next()) throw new SQLException("Item not found");
-                    String name = rs.getString("name");
-                    double price = rs.getDouble("unitPrice");
-                    boolean active = rs.getBoolean("isActive");
-                    int stock = rs.getInt("stockQty");
+                    String name   = rs.getString("name");
+                    double price  = rs.getDouble("unitPrice");
+                    boolean active= rs.getBoolean("isActive");
+                    int stock     = rs.getInt("stockQty");
 
                     if (!active) throw new SQLException("Item '" + name + "' is INACTIVE");
                     if (qty <= 0) throw new SQLException("Quantity must be > 0");
@@ -104,52 +107,62 @@ public class BillingDAO {
                 }
             }
             c.commit();
+        } catch (SQLException ex) {
+            throw ex;
         }
     }
 
     public void removeLine(int billItemId) throws SQLException {
         final String getLine = "SELECT itemId, qty FROM bill_items WHERE billItemId=?";
         final String delLine = "DELETE FROM bill_items WHERE billItemId=?";
-        final String incStock = "UPDATE items SET stockQty = stockQty + ? WHERE itemId=?";
+        final String incStock= "UPDATE items SET stockQty = stockQty + ? WHERE itemId=?";
 
         try (Connection c = DBConnection.getInstance().getConnection()) {
             c.setAutoCommit(false);
-            Integer itemId = null;
-            int qty = 0;
+            try {
+                Integer itemId = null;
+                int qty = 0;
 
-            try (PreparedStatement g = c.prepareStatement(getLine)) {
-                g.setInt(1, billItemId);
-                try (ResultSet rs = g.executeQuery()) {
-                    if (rs.next()) {
-                        int iid = rs.getInt("itemId");
-                        if (!rs.wasNull()) itemId = iid;
-                        qty = rs.getInt("qty");
-                    } else {
-                        c.rollback(); return;
+                try (PreparedStatement g = c.prepareStatement(getLine)) {
+                    g.setInt(1, billItemId);
+                    try (ResultSet rs = g.executeQuery()) {
+                        if (rs.next()) {
+                            int iid = rs.getInt("itemId");
+                            if (!rs.wasNull()) itemId = iid;
+                            qty = rs.getInt("qty");
+                        } else {
+                            c.rollback();
+                            return; // nothing to delete
+                        }
                     }
                 }
-            }
 
-            try (PreparedStatement d = c.prepareStatement(delLine)) {
-                d.setInt(1, billItemId);
-                d.executeUpdate();
-            }
-
-            if (itemId != null && qty > 0) {
-                try (PreparedStatement up = c.prepareStatement(incStock)) {
-                    up.setInt(1, qty);
-                    up.setInt(2, itemId);
-                    up.executeUpdate();
+                try (PreparedStatement d = c.prepareStatement(delLine)) {
+                    d.setInt(1, billItemId);
+                    d.executeUpdate();
                 }
-            }
 
-            c.commit();
+                if (itemId != null && qty > 0) {
+                    try (PreparedStatement up = c.prepareStatement(incStock)) {
+                        up.setInt(1, qty);
+                        up.setInt(2, itemId);
+                        up.executeUpdate();
+                    }
+                }
+
+                c.commit();
+            } catch (SQLException ex) {
+                c.rollback();
+                throw ex;
+            } finally {
+                c.setAutoCommit(true);
+            }
         }
     }
 
     public void updateQty(int billItemId, int newQty, int billId) throws SQLException {
-        final String getLine = "SELECT itemId, qty, unitPrice FROM bill_items WHERE billItemId=? AND billId=?";
-        final String setQty  = "UPDATE bill_items SET qty=?, lineTotal=? WHERE billItemId=?";
+        final String getLine  = "SELECT itemId, qty, unitPrice FROM bill_items WHERE billItemId=? AND billId=?";
+        final String setQty   = "UPDATE bill_items SET qty=?, lineTotal=? WHERE billItemId=?";
         final String incStock = "UPDATE items SET stockQty = stockQty + ? WHERE itemId=?";
         final String decStock = "UPDATE items SET stockQty = stockQty - ? WHERE itemId=? AND stockQty >= ?";
 
@@ -157,49 +170,55 @@ public class BillingDAO {
 
         try (Connection c = DBConnection.getInstance().getConnection()) {
             c.setAutoCommit(false);
+            try {
+                Integer itemId = null;
+                int oldQty = 0;
+                double unitPrice = 0;
 
-            Integer itemId = null;
-            int oldQty = 0;
-            double unitPrice = 0;
-
-            try (PreparedStatement g = c.prepareStatement(getLine)) {
-                g.setInt(1, billItemId);
-                g.setInt(2, billId);
-                try (ResultSet rs = g.executeQuery()) {
-                    if (!rs.next()) { c.rollback(); throw new SQLException("Line not found"); }
-                    int iid = rs.getInt("itemId");
-                    if (!rs.wasNull()) itemId = iid;
-                    oldQty = rs.getInt("qty");
-                    unitPrice = rs.getDouble("unitPrice");
-                }
-            }
-
-            int diff = newQty - oldQty;
-            if (itemId != null && diff != 0) {
-                if (diff > 0) { // need more stock
-                    try (PreparedStatement d = c.prepareStatement(decStock)) {
-                        d.setInt(1, diff);
-                        d.setInt(2, itemId);
-                        d.setInt(3, diff);
-                        if (d.executeUpdate() != 1) { c.rollback(); throw new SQLException("Not enough stock"); }
-                    }
-                } else { // return stock
-                    try (PreparedStatement i = c.prepareStatement(incStock)) {
-                        i.setInt(1, -diff);
-                        i.setInt(2, itemId);
-                        i.executeUpdate();
+                try (PreparedStatement g = c.prepareStatement(getLine)) {
+                    g.setInt(1, billItemId);
+                    g.setInt(2, billId);
+                    try (ResultSet rs = g.executeQuery()) {
+                        if (!rs.next()) { c.rollback(); throw new SQLException("Line not found"); }
+                        int iid = rs.getInt("itemId");
+                        if (!rs.wasNull()) itemId = iid;
+                        oldQty = rs.getInt("qty");
+                        unitPrice = rs.getDouble("unitPrice");
                     }
                 }
-            }
 
-            try (PreparedStatement s = c.prepareStatement(setQty)) {
-                s.setInt(1, newQty);
-                s.setDouble(2, unitPrice * newQty);
-                s.setInt(3, billItemId);
-                s.executeUpdate();
-            }
+                int diff = newQty - oldQty;
+                if (itemId != null && diff != 0) {
+                    if (diff > 0) { // need more stock
+                        try (PreparedStatement d = c.prepareStatement(decStock)) {
+                            d.setInt(1, diff);
+                            d.setInt(2, itemId);
+                            d.setInt(3, diff);
+                            if (d.executeUpdate() != 1) { c.rollback(); throw new SQLException("Not enough stock"); }
+                        }
+                    } else { // return stock
+                        try (PreparedStatement i = c.prepareStatement(incStock)) {
+                            i.setInt(1, -diff);
+                            i.setInt(2, itemId);
+                            i.executeUpdate();
+                        }
+                    }
+                }
 
-            c.commit();
+                try (PreparedStatement s = c.prepareStatement(setQty)) {
+                    s.setInt(1, newQty);
+                    s.setDouble(2, unitPrice * newQty);
+                    s.setInt(3, billItemId);
+                    s.executeUpdate();
+                }
+
+                c.commit();
+            } catch (SQLException ex) {
+                c.rollback();
+                throw ex;
+            } finally {
+                c.setAutoCommit(true);
+            }
         }
     }
 
@@ -219,7 +238,8 @@ public class BillingDAO {
     }
 
     public void applyDiscountAndMethod(int billId, double discountAmt, String method) throws SQLException {
-        final String up = "UPDATE bills SET discountAmt=?, paymentMethod=?, status='FINAL' WHERE billId=?";
+        // Mark as finalized now: set status + stamp billDate to NOW for dashboard accuracy
+        final String up = "UPDATE bills SET discountAmt=?, paymentMethod=?, status='FINAL', billDate=NOW() WHERE billId=?";
         try (Connection c = DBConnection.getInstance().getConnection();
              PreparedStatement ps = c.prepareStatement(up)) {
             ps.setDouble(1, Math.max(0, discountAmt));
@@ -252,7 +272,7 @@ public class BillingDAO {
                     b.setPaidAmount(rs.getDouble("paidAmount"));
                     b.setPaymentMethod(rs.getString("paymentMethod"));
                     b.setNotes(rs.getString("notes"));
-                    // (optional) keep status if you add it to model later
+                    // (optional) you can map status to model later if needed
                     b.setItems(listLines(billId));
                     return b;
                 }
@@ -295,26 +315,33 @@ public class BillingDAO {
 
         try (Connection c = DBConnection.getInstance().getConnection()) {
             c.setAutoCommit(false);
-            // restore stock
-            try (PreparedStatement g = c.prepareStatement(getLines)) {
-                g.setInt(1, billId);
-                try (ResultSet rs = g.executeQuery()) {
-                    while (rs.next()) {
-                        int iid = rs.getInt("itemId");
-                        if (!rs.wasNull()) {
-                            int qty = rs.getInt("qty");
-                            try (PreparedStatement up = c.prepareStatement(incStock)) {
-                                up.setInt(1, qty);
-                                up.setInt(2, iid);
-                                up.executeUpdate();
+            try {
+                // restore stock
+                try (PreparedStatement g = c.prepareStatement(getLines)) {
+                    g.setInt(1, billId);
+                    try (ResultSet rs = g.executeQuery()) {
+                        while (rs.next()) {
+                            int iid = rs.getInt("itemId");
+                            if (!rs.wasNull()) {
+                                int qty = rs.getInt("qty");
+                                try (PreparedStatement up = c.prepareStatement(incStock)) {
+                                    up.setInt(1, qty);
+                                    up.setInt(2, iid);
+                                    up.executeUpdate();
+                                }
                             }
                         }
                     }
                 }
+                try (PreparedStatement d1 = c.prepareStatement(delItems)) { d1.setInt(1, billId); d1.executeUpdate(); }
+                try (PreparedStatement d2 = c.prepareStatement(delBill )) { d2.setInt(1, billId); d2.executeUpdate(); }
+                c.commit();
+            } catch (SQLException ex) {
+                c.rollback();
+                throw ex;
+            } finally {
+                c.setAutoCommit(true);
             }
-            try (PreparedStatement d1 = c.prepareStatement(delItems)) { d1.setInt(1, billId); d1.executeUpdate(); }
-            try (PreparedStatement d2 = c.prepareStatement(delBill )) { d2.setInt(1, billId); d2.executeUpdate(); }
-            c.commit();
         }
     }
 

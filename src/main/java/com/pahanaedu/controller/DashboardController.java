@@ -30,8 +30,12 @@ public class DashboardController extends HttpServlet {
             req.setAttribute("todayRevenue", svc.todayRevenue());
             req.getRequestDispatcher("/admin/dashboard.jsp").forward(req, resp);
         } else {
-            req.setAttribute("todayBills", svc.todayBillsByUser(u.getUserId()));
-            req.setAttribute("todayRevenue", svc.todayRevenueByUser(u.getUserId()));
+            // Match JSP variable names:
+            req.setAttribute("staffTodayBills", svc.todayBillsByUser(u.getUserId()));
+            req.setAttribute("staffTodayRevenue", svc.todayRevenueByUser(u.getUserId()));
+            req.setAttribute("customersServed", svc.todayCustomersServedByUser(u.getUserId()));
+            // If you don’t have tasks feature yet:
+            req.setAttribute("completedTasks", 0);
             req.getRequestDispatcher("/staff/dashboard.jsp").forward(req, resp);
         }
     }
