@@ -253,10 +253,12 @@
                     <span class="nav-icon">📦</span>
                     <span>Manage Items</span>
                 </a>
-                <a href="${ctx}/api/help" class="nav-link">
-                    <span class="nav-icon">🔗 </span>
-                    <span>API Help</span>
-                </a>
+                
+                <a href="${ctx}/help/index.jsp" class="nav-link">
+  <span class="nav-icon">❓</span>
+  <span>Help</span>
+</a>
+
             </div>
         </div>
 
