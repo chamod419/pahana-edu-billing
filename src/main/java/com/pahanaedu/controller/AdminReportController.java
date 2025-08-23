@@ -23,7 +23,7 @@ public class AdminReportController extends HttpServlet {
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
-        // Require login (AuthFilter තිබ්බත් safety)
+        // Require login (AuthFilter safety)
         HttpSession s = req.getSession(false);
         User u = (s==null) ? null : (User) s.getAttribute("user");
         if (u == null) { resp.sendRedirect(req.getContextPath()+"/login"); return; }
